@@ -1,0 +1,27 @@
+{
+  "name": "@zig-devkit/lib",
+  "module": "index.ts",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build:tsc": "tsc",
+    "build:js": "bun build ./js/index.ts --outdir ./dist --sourcemap=linked",
+    "build:zig": "zig build wasm -p js",
+    "dev:zig": "watchexec --exts zig zig build wasm -p js",
+    "dev:tsc": "tsc -w",
+    "dev:js": "watchexec --exts ts -- bun build:js",
+    "dev": "bun dev:js & bun dev:tsc & bun dev:zig",
+    "clean": "rm -rf dist js/bin .zig-cache zig-out"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@types/lodash-es": "^4.17.12",
+    "lodash-es": "^4.17.21",
+    "valibot": "^0.37.0"
+  }
+}
