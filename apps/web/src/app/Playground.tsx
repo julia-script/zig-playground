@@ -13,7 +13,6 @@ import {
   TokenTag,
   getNodeSource,
   tokenSlice,
-  render,
   getMainToken,
   getNodeData,
   AstNodeIndex,
@@ -25,7 +24,6 @@ import {
   getNodeExtraDataSubRange,
   getNodeExtraDataFnProtoOne,
   getNodeExtraDataFnProto,
-  getTokenStart,
   assignDestructure,
   fullStructInit,
   fullArrayType,
@@ -35,36 +33,20 @@ import {
   fullCall,
   fullSlice,
   fullContainerField,
-  tokenLocation,
-  getTokenRange,
-  getNodeRange,
+  fullIf,
   fullSwitchCase,
-  whileFull,
-  forFull,
   getTokensLength,
   AstfullWhile,
-  ifFull,
   AstfullContainerField,
-  asmFull,
-  getNodeExtraDataAsm,
   fullAsm,
+  AstNodeTagMap,
+  fullFor,
+  fullWhile,
+  NodeRef,
 } from "@zig-devkit/lib";
-import { Editor } from "./editor";
-import memoize from "lodash-es/memoize";
-import {
-  experimental_useEffectEvent,
-  PropsWithChildren,
-  startTransition,
-  useEffect,
-  useInsertionEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-} from "react";
-import MonacoEditor, { useMonaco } from "@monaco-editor/react";
-import { initVimMode } from "monaco-vim";
-import { loader } from "@monaco-editor/react";
-import { languages } from "monaco-editor/esm/vs/editor/editor.api";
+
+import { Editor, EditorReadOnly } from "./editor";
+import { ComponentProps, PropsWithChildren, useMemo, useState } from "react";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -72,355 +54,85 @@ import {
 } from "@/components/ui/resizable";
 import { range } from "lodash-es";
 import { ErrorBoundary } from "react-error-boundary";
-// class State {
-//   clone = () => new State();
-//   equals = (other: languages.IState) => true;
-// }
-// export const TokenToScopeMap: Record<TokenTag, string> = {
-//   [TokenTag.Invalid]: "invalid",
-//   [TokenTag.InvalidPeriodasterisks]: "invalid",
-//   [TokenTag.Identifier]: "variable",
-//   [TokenTag.StringLiteral]: "string",
-//   [TokenTag.MultilineStringLiteralLine]: "string",
-//   [TokenTag.CharLiteral]: "string",
-//   [TokenTag.Eof]: "invalid",
-//   [TokenTag.Builtin]: "support.function",
-//   [TokenTag.Bang]: "keyword.operator.logical",
-//   [TokenTag.Pipe]: "keyword.operator.bitwise",
-//   [TokenTag.PipePipe]: "keyword.operator.logical",
-//   [TokenTag.PipeEqual]: "keyword.operator.assignment",
-//   [TokenTag.Equal]: "keyword.operator.assignment",
-//   [TokenTag.EqualEqual]: "keyword.operator.comparison",
-//   [TokenTag.EqualAngleBracketRight]: "keyword.operator.assignment",
-//   [TokenTag.BangEqual]: "keyword.operator.comparison",
-//   [TokenTag.LParen]: "punctuation.section.parens.begin",
-//   [TokenTag.RParen]: "punctuation.section.parens.end",
-//   [TokenTag.Semicolon]: "punctuation.terminator",
-//   [TokenTag.Percent]: "keyword.operator.arithmetic",
-//   [TokenTag.PercentEqual]: "keyword.operator.assignment",
-//   [TokenTag.LBrace]: "punctuation.section.braces.begin",
-//   [TokenTag.RBrace]: "punctuation.section.braces.end",
-//   [TokenTag.LBracket]: "punctuation.section.brackets.begin",
-//   [TokenTag.RBracket]: "punctuation.section.brackets.end",
-//   [TokenTag.Period]: "punctuation.accessor",
-//   [TokenTag.PeriodAsterisk]: "punctuation.accessor",
-//   [TokenTag.Ellipsis2]: "punctuation.definition.range",
-//   [TokenTag.Ellipsis3]: "punctuation.definition.range",
-//   [TokenTag.Caret]: "keyword.operator.bitwise",
-//   [TokenTag.CaretEqual]: "keyword.operator.assignment",
-//   [TokenTag.Plus]: "keyword.operator.arithmetic",
-//   [TokenTag.PlusPlus]: "keyword.operator.increment",
-//   [TokenTag.PlusEqual]: "keyword.operator.assignment",
-//   [TokenTag.PlusPercent]: "keyword.operator.arithmetic",
-//   [TokenTag.PlusPercentEqual]: "keyword.operator.assignment",
-//   [TokenTag.PlusPipe]: "keyword.operator.bitwise",
-//   [TokenTag.PlusPipeEqual]: "keyword.operator.assignment",
-//   [TokenTag.Minus]: "keyword.operator.arithmetic",
-//   [TokenTag.MinusEqual]: "keyword.operator.assignment",
-//   [TokenTag.MinusPercent]: "keyword.operator.arithmetic",
-//   [TokenTag.MinusPercentEqual]: "keyword.operator.assignment",
-//   [TokenTag.MinusPipe]: "keyword.operator.bitwise",
-//   [TokenTag.MinusPipeEqual]: "keyword.operator.assignment",
-//   [TokenTag.Asterisk]: "keyword.operator.arithmetic",
-//   [TokenTag.AsteriskEqual]: "keyword.operator.assignment",
-//   [TokenTag.AsteriskAsterisk]: "keyword.operator.exponent",
-//   [TokenTag.AsteriskPercent]: "keyword.operator.arithmetic",
-//   [TokenTag.AsteriskPercentEqual]: "keyword.operator.assignment",
-//   [TokenTag.AsteriskPipe]: "keyword.operator.bitwise",
-//   [TokenTag.AsteriskPipeEqual]: "keyword.operator.assignment",
-//   [TokenTag.Arrow]: "keyword.operator.arrow",
-//   [TokenTag.Colon]: "punctuation.separator.key-value",
-//   [TokenTag.Slash]: "keyword.operator.arithmetic",
-//   [TokenTag.SlashEqual]: "keyword.operator.assignment",
-//   [TokenTag.Comma]: "punctuation.separator",
-//   [TokenTag.Ampersand]: "keyword.operator.bitwise",
-//   [TokenTag.AmpersandEqual]: "keyword.operator.assignment",
-//   [TokenTag.QuestionMark]: "punctuation.definition.ternary",
-//   [TokenTag.AngleBracketLeft]: "keyword.operator.comparison",
-//   [TokenTag.AngleBracketLeftEqual]: "keyword.operator.comparison",
-//   [TokenTag.AngleBracketAngleBracketLeft]: "keyword.operator.shift",
-//   [TokenTag.AngleBracketAngleBracketLeftEqual]: "keyword.operator.assignment",
-//   [TokenTag.AngleBracketAngleBracketLeftPipe]: "keyword.operator.bitwise",
-//   [TokenTag.AngleBracketAngleBracketLeftPipeEqual]:
-//     "keyword.operator.assignment",
-//   [TokenTag.AngleBracketRight]: "keyword.operator.comparison",
-//   [TokenTag.AngleBracketRightEqual]: "keyword.operator.comparison",
-//   [TokenTag.AngleBracketAngleBracketRight]: "keyword.operator.shift",
-//   [TokenTag.AngleBracketAngleBracketRightEqual]: "keyword.operator.assignment",
-//   [TokenTag.Tilde]: "keyword.operator.bitwise",
-//   [TokenTag.NumberLiteral]: "constant.numeric",
-//   [TokenTag.DocComment]: "comment.documentation",
-//   [TokenTag.ContainerDocComment]: "comment.documentation",
-//   [TokenTag.KeywordAddrspace]: "keyword",
-//   [TokenTag.KeywordAlign]: "keyword",
-//   [TokenTag.KeywordAllowzero]: "keyword",
-//   [TokenTag.KeywordAnd]: "keyword.operator.logical",
-//   [TokenTag.KeywordAnyframe]: "keyword",
-//   [TokenTag.KeywordAnytype]: "keyword",
-//   [TokenTag.KeywordAsm]: "keyword",
-//   [TokenTag.KeywordAsync]: "keyword",
-//   [TokenTag.KeywordAwait]: "keyword",
-//   [TokenTag.KeywordBreak]: "keyword.control",
-//   [TokenTag.KeywordCallconv]: "keyword",
-//   [TokenTag.KeywordCatch]: "keyword.control",
-//   [TokenTag.KeywordComptime]: "keyword",
-//   [TokenTag.KeywordConst]: "storage.modifier",
-//   [TokenTag.KeywordContinue]: "keyword.control",
-//   [TokenTag.KeywordDefer]: "keyword.control",
-//   [TokenTag.KeywordElse]: "keyword.control",
-//   [TokenTag.KeywordEnum]: "keyword",
-//   [TokenTag.KeywordErrdefer]: "keyword.control",
-//   [TokenTag.KeywordError]: "keyword",
-//   [TokenTag.KeywordExport]: "storage.modifier",
-//   [TokenTag.KeywordExtern]: "storage.modifier",
-//   [TokenTag.KeywordFn]: "keyword",
-//   [TokenTag.KeywordFor]: "keyword.control",
-//   [TokenTag.KeywordIf]: "keyword.control",
-//   [TokenTag.KeywordInline]: "keyword",
-//   [TokenTag.KeywordNoalias]: "keyword",
-//   [TokenTag.KeywordNoinline]: "keyword",
-//   [TokenTag.KeywordNosuspend]: "keyword",
-//   [TokenTag.KeywordOpaque]: "keyword",
-//   [TokenTag.KeywordOr]: "keyword.operator.logical",
-//   [TokenTag.KeywordOrelse]: "keyword.control",
-//   [TokenTag.KeywordPacked]: "keyword",
-//   [TokenTag.KeywordPub]: "storage.modifier",
-//   [TokenTag.KeywordResume]: "keyword.control",
-//   [TokenTag.KeywordReturn]: "keyword.control",
-//   [TokenTag.KeywordLinksection]: "keyword",
-//   [TokenTag.KeywordStruct]: "keyword",
-//   [TokenTag.KeywordSuspend]: "keyword.control",
-//   [TokenTag.KeywordSwitch]: "keyword.control",
-//   [TokenTag.KeywordTest]: "keyword",
-//   [TokenTag.KeywordThreadlocal]: "keyword",
-//   [TokenTag.KeywordTry]: "keyword.control",
-//   [TokenTag.KeywordUnion]: "keyword",
-//   [TokenTag.KeywordUnreachable]: "keyword.control",
-//   [TokenTag.KeywordUsingnamespace]: "keyword",
-//   [TokenTag.KeywordVar]: "storage.type",
-//   [TokenTag.KeywordVolatile]: "keyword",
-//   [TokenTag.KeywordWhile]: "keyword.control",
-// };
-// import * as monaco from "monaco-editor";
-//
-// monaco.languages.register({ id: "zig" });
-// monaco.languages.setTokensProvider("zig", {
-//   getInitialState: () => {
-//     return new State();
-//   },
-//   tokenize(line, state) {
-//     const tokens = tokenizeLine(line).map((token) => ({
-//       startIndex: token.start,
-//       scopes: TokenToScopeMap[token.tag],
-//     }));
-//     return {
-//       tokens,
-//       endState: state.clone(),
-//     };
-//   },
-// });
-//
-// const Editor = () => {
-//   const ref = useRef<HTMLDivElement>(null);
-//   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-//
-//   const statusBarRef = useRef<HTMLDivElement>(null);
-//   const { source, setSource, getAst, ast, active, setActive, hovered } =
-//     useAst();
-//
-//   const save = useEffectEvent(() => {
-//     startTransition(() => {
-//       const rendered = render(ast);
-//       const editor = editorRef.current;
-//       if (!editor) return;
-//       if (!rendered || rendered === source) return;
-//       const model = editor.getModel();
-//       if (!model) return;
-//       model.pushEditOperations(
-//         [],
-//         [
-//           {
-//             range: model.getFullModelRange(),
-//             text: rendered,
-//           },
-//         ],
-//         () => null,
-//       );
-//     });
-//   });
-//   useLayoutEffect(() => {
-//     if (!ref.current) return;
-//     if (editorRef.current) return;
-//
-//     const editor = monaco.editor.create(ref.current, {
-//       value: source,
-//       language: "zig",
-//       automaticLayout: true,
-//       minimap: { enabled: false },
-//       wordWrap: "on",
-//       scrollBeyondLastLine: false,
-//       tabSize: 4,
-//       theme: "vs-dark",
-//       fontSize: 16,
-//     });
-//
-//     const vim = initVimMode(editor, statusBarRef.current);
-//
-//     editor.addAction({
-//       id: "format-on-save",
-//       label: "Format on Save",
-//
-//       keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS],
-//       contextMenuGroupId: "navigation",
-//       contextMenuOrder: 1.5,
-//
-//       run: function() {
-//         save();
-//       },
-//     });
-//     editor.getModel()?.onDidChangeContent(() => {
-//       startTransition(() => {
-//         setSource(editor.getValue());
-//       });
-//     });
-//     editorRef.current = editor;
-//     return () => {
-//       editor.dispose();
-//       vim.dispose();
-//       editorRef.current = null;
-//     };
-//   }, []);
-//
-//   const highlight = useEffectEvent(
-//     (
-//       active: ActiveEntity,
-//       decorationOptions: monaco.editor.IModelDecorationOptions,
-//     ) => {
-//       const editor = editorRef.current;
-//       if (!editor) return;
-//
-//       if (!active) return;
-//       const location =
-//         active.kind === "token"
-//           ? getTokenRange(ast, active.id)
-//           : active.kind === "node"
-//             ? getNodeRange(ast, active.id)
-//             : null;
-//
-//       if (!location) return;
-//
-//       const range = new monaco.Range(
-//         location.start_line + 1,
-//         location.start_column + 1,
-//         location.end_line + 1,
-//         location.end_column + 1,
-//       );
-//
-//       const decorations = editor.createDecorationsCollection([
-//         // {
-//         //   range: new monaco.Range(3, 1, 5, 1),
-//         //   options: {
-//         //     isWholeLine: true,
-//         //     linesDecorationsClassName: "myLineDecoration",
-//         //   },
-//         // },
-//         {
-//           range,
-//           options: decorationOptions,
-//           // options: {
-//           //
-//           //   beforeContentClassName: "border-l border-1 border-yellow-500",
-//           //   afterContentClassName: "border-r border-1 border-yellow-500",
-//           //   inlineClassName: "bg-yellow-500 bg-opacity-20",
-//           //   // inlineClassName: "editor-active",
-//           //   // inlineClassName:
-//           //   //   "outline outline-2 outline-yellow-500 bg-opacity-20 outline-offset-2 inline-block rounded-sm",
-//           // },
-//         },
-//       ]);
-//       // console.log(decorations);
-//       return decorations;
-//     },
-//   );
-//   useEffect(() => {
-//     if (!active) return;
-//     const decorations = highlight(active, {
-//       // -5px 0px 0px 0px black
-//       beforeContentClassName: "active-left shadow-yellow-500",
-//       // beforeContentClassName: "border-l border-1 border-yellow-500",
-//       afterContentClassName: "active-right shadow-yellow-500",
-//       // inlineClassName: "bg-yellow-500 bg-opacity-20 brightness-125",
-//       inlineClassName: "bg-yellow-500 bg-opacity-20 brightness-125",
-//     });
-//     return () => {
-//       decorations?.clear();
-//     };
-//   }, [active]);
-//   useEffect(() => {
-//     if (!hovered) return;
-//     if (active && active.id === hovered.id && active.kind === hovered.kind)
-//       return;
-//     const decorations = highlight(hovered, {
-//       // beforeContentClassName: "border-l border-1 border-yellow-500",
-//       // afterContentClassName: "border-r border-1 border-yellow-500",
-//       inlineClassName: "bg-cyan-500 bg-opacity-20 brightness-125 ",
-//     });
-//     return () => {
-//       decorations?.clear();
-//     };
-//   }, [hovered, active]);
-//   return (
-//     <div className="flex flex-col h-full shadow-[-2px_0_0_0_theme(colors.yellow)]">
-//       <div ref={ref} className="h-full grow shadow-[-2px_0_0_0]" />
-//       <div ref={statusBarRef} className="h-4" />
-//     </div>
-//   );
-// };
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+
 export const defaultSource = `fn main() void {
     const x: i32 = 2;
     const y: i32 = 2;
     const z: i32 = x + y;
 }
 `;
-import { CaretDownIcon } from "@radix-ui/react-icons";
 import {
-  useAst,
-  ActiveEntity,
-  AstProvider,
-  isSameActiveEntity,
-} from "./AstProvider";
-import { useEffectEvent } from "./useEffectEvent";
+  CaretDownIcon,
+  CaretRightIcon,
+  DotFilledIcon,
+  DotIcon,
+} from "@radix-ui/react-icons";
+import { useAst, AstProvider, isSameActiveEntity } from "./AstProvider";
+import { cn } from "@/lib/utils";
+import assert from "assert";
+import Image from "next/image";
 
 const NodeDisplay = ({
   node,
   children,
 }: PropsWithChildren<{ node: number }>) => {
-  const { ast, active, setActive } = useAst();
+  const { ast, active, hovered, setActive, setHovered } = useAst();
+
+  const isActive = isSameActiveEntity(active, { kind: "node", id: node });
   return (
     <div className="flex flex-col">
       <header
-        className="py-1 px-1 flex items-center gap-2  text-xs"
+        className={cn(
+          "px-4 text-xs flex gap-2  py-1 items-center hover:brightness-110 cursor-pointer text-zinc-200 font-semibold",
+          {
+            "bg-zinc-900/50 text-cyan-500": isActive,
+          },
+        )}
         onClick={(e) => {
           e.stopPropagation();
-          if (active && active.id === node) {
+          if (active?.kind === "node" && active.id === node) {
             setActive(null);
+            return;
           }
-          setActive({ kind: "node", id: node });
+          setActive({
+            kind: "node",
+            id: node,
+          });
+        }}
+        onMouseEnter={() => {
+          setHovered({
+            kind: "node",
+            id: node,
+          });
+        }}
+        onMouseLeave={() => {
+          setHovered((prev) => {
+            if (isSameActiveEntity(prev, { kind: "node", id: node })) {
+              return null;
+            }
+            return prev;
+          });
         }}
       >
         <button>
           <CaretDownIcon className="w-4 h-4" />
         </button>
 
-        <div className="flex gap-2 items-center">
-          <span>.{getNodeTagLabel(ast, node)}</span>
-          <span className="text-xs opacity-50 border p-1 px-2 rounded-sm">
-            Node #{node}
-          </span>
-        </div>
+        <div className="flex gap-2">.{getNodeTagLabel(ast, node)}</div>
+        <Badge className="hover:text-cyan-500">Node #{node}</Badge>
       </header>
 
-      <div className="ml-3  border-l">{children}</div>
+      <div className="ml-3  border-l">
+        <ErrorBoundary
+          resetKeys={[node, ast]}
+          fallbackRender={({ error }) => (
+            <div className="bg-red-500/50">{error.message}</div>
+          )}
+        >
+          {children}
+        </ErrorBoundary>
+      </div>
     </div>
   );
 };
@@ -521,36 +233,9 @@ const StructInitBody = ({ node }: NodeComponent) => {
   return el;
 };
 
-const StructInit = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <StructInitBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
 const ArrayTypeBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const mainToken = getMainToken(ast, node);
   const arrayType = fullArrayType(ast, node);
-  // const tree = r.tree;
-  // const ais = r.ais;
-  // const rbracket = tree.firstToken(array_type.ast.elem_type) - 1;
-  // const one_line = tree.tokensOnSameLine(array_type.ast.lbracket, rbracket);
-  // const inner_space = if (one_line) Space.none else Space.newline;
-  // ais.pushIndentNextLine();
-  // try renderToken(r, array_type.ast.lbracket, inner_space); // lbracket
-  // try renderExpression(r, array_type.ast.elem_count, inner_space);
-  // if (array_type.ast.sentinel != 0) {
-  //     try renderToken(r, tree.firstToken(array_type.ast.sentinel) - 1, inner_space); // colon
-  //     try renderExpression(r, array_type.ast.sentinel, inner_space);
-  // }
-  // ais.popIndent();
-  // try renderToken(r, rbracket, .none); // rbracket
-  // return renderExpression(r, array_type.ast.elem_type, space);
 
   const rbracket = getFirstToken(ast, arrayType.ast.elem_type) - 1;
   const el: JSX.Element[] = [];
@@ -758,51 +443,6 @@ const PtrTypeBody = ({ node }: NodeComponent) => {
   return el;
 };
 
-const PtrType = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <PtrTypeBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
-// fn anythingBetween(tree: Ast, start_token: Ast.TokenIndex, end_token: Ast.TokenIndex) bool {
-//     if (start_token + 1 != end_token) return true;
-//     const token_starts = tree.tokens.items(.start);
-//     const between_source = tree.source[token_starts[start_token]..token_starts[start_token + 1]];
-//     for (between_source) |byte| switch (byte) {
-//         '/' => return true,
-//         else => continue,
-//     };
-//     return false;
-// }
-// fn hasMultilineString(tree: Ast, start_token: Ast.TokenIndex, end_token: Ast.TokenIndex) bool {
-//     const token_tags = tree.tokens.items(.tag);
-//
-//     for (token_tags[start_token..end_token]) |tag| {
-//         switch (tag) {
-//             .multiline_string_literal_line => return true,
-//             else => continue,
-//         }
-//     }
-//
-//     return false;
-// }
-const hasMultilineString = (
-  ast: number,
-  startToken: number,
-  endToken: number,
-) => {
-  for (let i = startToken; i < endToken; i++) {
-    if (getTokenTag(ast, i) === TokenTag.MultilineStringLiteralLine) {
-      return true;
-    }
-  }
-  return false;
-};
 const anythingBetween = (ast: number, startToken: number, endToken: number) => {
   if (startToken + 1 !== endToken) return true;
   // TODO: implement
@@ -810,56 +450,23 @@ const anythingBetween = (ast: number, startToken: number, endToken: number) => {
 };
 const ArrayInitBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const mainToken = getMainToken(ast, node);
   const arrayInit = fullArrayInit(ast, node);
   const el: JSX.Element[] = [];
-  // const tree = r.tree;
-  // const ais = r.ais;
-  // const gpa = r.gpa;
-  // const token_tags = tree.tokens.items(.tag);
-  //
-  // if (array_init.ast.type_expr == 0) {
-  //     try renderToken(r, array_init.ast.lbrace - 1, .none); // .
-  // } else {
-  //     try renderExpression(r, array_init.ast.type_expr, .none); // T
-  // }
   if (arrayInit.ast.type_expr === 0) {
     el.push(<TokenDisplay token={arrayInit.ast.lbrace - 1} />);
   } else {
     el.push(<Expression node={arrayInit.ast.type_expr} />);
   }
-  // if (array_init.ast.elements.len == 0) {
-  //     ais.pushIndentNextLine();
-  //     try renderToken(r, array_init.ast.lbrace, .none); // lbrace
-  //     ais.popIndent();
-  //     return renderToken(r, array_init.ast.lbrace + 1, space); // rbrace
-  // }
   if (arrayInit.ast.elements.length === 0) {
     el.push(<TokenDisplay token={arrayInit.ast.lbrace} />);
     el.push(<TokenDisplay token={arrayInit.ast.lbrace + 1} />);
     return el;
   }
-  // const last_elem = array_init.ast.elements[array_init.ast.elements.len - 1];
-  // const last_elem_token = tree.lastToken(last_elem);
-  // const trailing_comma = token_tags[last_elem_token + 1] == .comma;
-  // const rbrace = if (trailing_comma) last_elem_token + 2 else last_elem_token + 1;
-  // assert(token_tags[rbrace] == .r_brace);
   const lastElem = arrayInit.ast.elements[arrayInit.ast.elements.length - 1];
   const lastElemToken = getLastToken(ast, lastElem);
   const trailingComma = getTokenTag(ast, lastElemToken + 1) === TokenTag.Comma;
   const rbrace = trailingComma ? lastElemToken + 2 : lastElemToken + 1;
 
-  // if (array_init.ast.elements.len == 1) {
-  //     const only_elem = array_init.ast.elements[0];
-  //     const first_token = tree.firstToken(only_elem);
-  //     if (token_tags[first_token] != .multiline_string_literal_line and
-  //         !anythingBetween(tree, last_elem_token, rbrace))
-  //     {
-  //         try renderToken(r, array_init.ast.lbrace, .none);
-  //         try renderExpression(r, only_elem, .none);
-  //         return renderToken(r, rbrace, space);
-  //     }
-  // }
   if (arrayInit.ast.elements.length === 1) {
     const onlyElem = arrayInit.ast.elements[0];
     const firstToken = getFirstToken(ast, onlyElem);
@@ -873,213 +480,13 @@ const ArrayInitBody = ({ node }: NodeComponent) => {
       return el;
     }
   }
-  // const contains_comment = hasComment(tree, array_init.ast.lbrace, rbrace);
-  // const contains_multiline_string = hasMultilineString(tree, array_init.ast.lbrace, rbrace);
-  // const containsMultiLineString = hasMultilineString(ast, arrayInit.ast.lbrace, rbrace);
-  // if (!trailing_comma and !contains_comment and !contains_multiline_string) {
-  //     // Render all on one line, no trailing comma.
-  //     if (array_init.ast.elements.len == 1) {
-  //         // If there is only one element, we don't use spaces
-  //         try renderToken(r, array_init.ast.lbrace, .none);
-  //         try renderExpression(r, array_init.ast.elements[0], .none);
-  //     } else {
-  //         try renderToken(r, array_init.ast.lbrace, .space);
-  //         for (array_init.ast.elements) |elem| {
-  //             try renderExpression(r, elem, .comma_space);
-  //         }
-  //     }
-  //     return renderToken(r, last_elem_token + 1, space); // rbrace
-  // }
-  //TODO should check for multilinestring?
-  // if (arrayInit.ast.elements.length === 1) {
-  //   el.push(<TokenDisplay token={arrayInit.ast.lbrace} />);
-  //   el.push(<Expression node={arrayInit.ast.elements[0]} />);
-  // }  else {
   el.push(<TokenDisplay token={arrayInit.ast.lbrace} />);
   for (const elem of arrayInit.ast.elements) {
     el.push(<Expression node={elem} />);
     //TODO: add commas
   }
 
-  // }
   return el;
-  // ais.pushIndentNextLine();
-  // try renderToken(r, array_init.ast.lbrace, .newline);
-  //
-  // var expr_index: usize = 0;
-  // while (true) {
-  //     const row_size = rowSize(tree, array_init.ast.elements[expr_index..], rbrace);
-  //     const row_exprs = array_init.ast.elements[expr_index..];
-  //     // A place to store the width of each expression and its column's maximum
-  //     const widths = try gpa.alloc(usize, row_exprs.len + row_size);
-  //     defer gpa.free(widths);
-  //     @memset(widths, 0);
-  //
-  //     const expr_newlines = try gpa.alloc(bool, row_exprs.len);
-  //     defer gpa.free(expr_newlines);
-  //     @memset(expr_newlines, false);
-  //
-  //     const expr_widths = widths[0..row_exprs.len];
-  //     const column_widths = widths[row_exprs.len..];
-  //
-  //     // Find next row with trailing comment (if any) to end the current section.
-  //     const section_end = sec_end: {
-  //         var this_line_first_expr: usize = 0;
-  //         var this_line_size = rowSize(tree, row_exprs, rbrace);
-  //         for (row_exprs, 0..) |expr, i| {
-  //             // Ignore comment on first line of this section.
-  //             if (i == 0) continue;
-  //             const expr_last_token = tree.lastToken(expr);
-  //             if (tree.tokensOnSameLine(tree.firstToken(row_exprs[0]), expr_last_token))
-  //                 continue;
-  //             // Track start of line containing comment.
-  //             if (!tree.tokensOnSameLine(tree.firstToken(row_exprs[this_line_first_expr]), expr_last_token)) {
-  //                 this_line_first_expr = i;
-  //                 this_line_size = rowSize(tree, row_exprs[this_line_first_expr..], rbrace);
-  //             }
-  //
-  //             const maybe_comma = expr_last_token + 1;
-  //             if (token_tags[maybe_comma] == .comma) {
-  //                 if (hasSameLineComment(tree, maybe_comma))
-  //                     break :sec_end i - this_line_size + 1;
-  //             }
-  //         }
-  //         break :sec_end row_exprs.len;
-  //     };
-  //     expr_index += section_end;
-  //
-  //     const section_exprs = row_exprs[0..section_end];
-  //
-  //     var sub_expr_buffer = std.ArrayList(u8).init(gpa);
-  //     defer sub_expr_buffer.deinit();
-  //
-  //     const sub_expr_buffer_starts = try gpa.alloc(usize, section_exprs.len + 1);
-  //     defer gpa.free(sub_expr_buffer_starts);
-  //
-  //     var auto_indenting_stream = Ais{
-  //         .indent_delta = indent_delta,
-  //         .underlying_writer = sub_expr_buffer.writer(),
-  //     };
-  //     var sub_render: Render = .{
-  //         .gpa = r.gpa,
-  //         .ais = &auto_indenting_stream,
-  //         .tree = r.tree,
-  //         .fixups = r.fixups,
-  //     };
-  //
-  //     // Calculate size of columns in current section
-  //     var column_counter: usize = 0;
-  //     var single_line = true;
-  //     var contains_newline = false;
-  //     for (section_exprs, 0..) |expr, i| {
-  //         const start = sub_expr_buffer.items.len;
-  //         sub_expr_buffer_starts[i] = start;
-  //
-  //         if (i + 1 < section_exprs.len) {
-  //             try renderExpression(&sub_render, expr, .none);
-  //             const width = sub_expr_buffer.items.len - start;
-  //             const this_contains_newline = mem.indexOfScalar(u8, sub_expr_buffer.items[start..], '\n') != null;
-  //             contains_newline = contains_newline or this_contains_newline;
-  //             expr_widths[i] = width;
-  //             expr_newlines[i] = this_contains_newline;
-  //
-  //             if (!this_contains_newline) {
-  //                 const column = column_counter % row_size;
-  //                 column_widths[column] = @max(column_widths[column], width);
-  //
-  //                 const expr_last_token = tree.lastToken(expr) + 1;
-  //                 const next_expr = section_exprs[i + 1];
-  //                 column_counter += 1;
-  //                 if (!tree.tokensOnSameLine(expr_last_token, tree.firstToken(next_expr))) single_line = false;
-  //             } else {
-  //                 single_line = false;
-  //                 column_counter = 0;
-  //             }
-  //         } else {
-  //             try renderExpression(&sub_render, expr, .comma);
-  //             const width = sub_expr_buffer.items.len - start - 2;
-  //             const this_contains_newline = mem.indexOfScalar(u8, sub_expr_buffer.items[start .. sub_expr_buffer.items.len - 1], '\n') != null;
-  //             contains_newline = contains_newline or this_contains_newline;
-  //             expr_widths[i] = width;
-  //             expr_newlines[i] = contains_newline;
-  //
-  //             if (!contains_newline) {
-  //                 const column = column_counter % row_size;
-  //                 column_widths[column] = @max(column_widths[column], width);
-  //             }
-  //         }
-  //     }
-  //     sub_expr_buffer_starts[section_exprs.len] = sub_expr_buffer.items.len;
-  //
-  //     // Render exprs in current section.
-  //     column_counter = 0;
-  //     for (section_exprs, 0..) |expr, i| {
-  //         const start = sub_expr_buffer_starts[i];
-  //         const end = sub_expr_buffer_starts[i + 1];
-  //         const expr_text = sub_expr_buffer.items[start..end];
-  //         if (!expr_newlines[i]) {
-  //             try ais.writer().writeAll(expr_text);
-  //         } else {
-  //             var by_line = std.mem.splitScalar(u8, expr_text, '\n');
-  //             var last_line_was_empty = false;
-  //             try ais.writer().writeAll(by_line.first());
-  //             while (by_line.next()) |line| {
-  //                 if (std.mem.startsWith(u8, line, "//") and last_line_was_empty) {
-  //                     try ais.insertNewline();
-  //                 } else {
-  //                     try ais.maybeInsertNewline();
-  //                 }
-  //                 last_line_was_empty = (line.len == 0);
-  //                 try ais.writer().writeAll(line);
-  //             }
-  //         }
-  //
-  //         if (i + 1 < section_exprs.len) {
-  //             const next_expr = section_exprs[i + 1];
-  //             const comma = tree.lastToken(expr) + 1;
-  //
-  //             if (column_counter != row_size - 1) {
-  //                 if (!expr_newlines[i] and !expr_newlines[i + 1]) {
-  //                     // Neither the current or next expression is multiline
-  //                     try renderToken(r, comma, .space); // ,
-  //                     assert(column_widths[column_counter % row_size] >= expr_widths[i]);
-  //                     const padding = column_widths[column_counter % row_size] - expr_widths[i];
-  //                     try ais.writer().writeByteNTimes(' ', padding);
-  //
-  //                     column_counter += 1;
-  //                     continue;
-  //                 }
-  //             }
-  //
-  //             if (single_line and row_size != 1) {
-  //                 try renderToken(r, comma, .space); // ,
-  //                 continue;
-  //             }
-  //
-  //             column_counter = 0;
-  //             try renderToken(r, comma, .newline); // ,
-  //             try renderExtraNewline(r, next_expr);
-  //         }
-  //     }
-  //
-  //     if (expr_index == array_init.ast.elements.len)
-  //         break;
-  // }
-  //
-  // ais.popIndent();
-  // return renderToken(r, rbrace, space); // rbrace
-  //
-};
-
-const ArrayInit = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <ArrayInitBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
 };
 
 const CallBody = ({ node }: NodeComponent) => {
@@ -1087,11 +494,6 @@ const CallBody = ({ node }: NodeComponent) => {
   const call = fullCall(ast, node);
   const el: JSX.Element[] = [];
 
-  // if (call.async_token) |async_token| {
-  //     try renderToken(r, async_token, .space);
-  // }
-  // try renderExpression(r, call.ast.fn_expr, .none);
-  // try renderParamList(r, call.ast.lparen, call.ast.params, space);
   if (call.async_token) {
     el.push(<TokenDisplay token={call.async_token} />);
   }
@@ -1109,16 +511,6 @@ const ParamList = ({
   params: number[];
 }) => {
   const { ast } = useAst();
-  //   const tree = r.tree;
-  // const ais = r.ais;
-  // const token_tags = tree.tokens.items(.tag);
-  //
-  // if (params.len == 0) {
-  //     ais.pushIndentNextLine();
-  //     try renderToken(r, lparen, .none);
-  //     ais.popIndent();
-  //     return renderToken(r, lparen + 1, space); // )
-  // }
   if (params.length === 0) {
     return [
       <TokenDisplay token={lparen} />,
@@ -1130,14 +522,9 @@ const ParamList = ({
   // const last_param = params[params.len - 1];
   const lastParam = params[params.length - 1];
   const afterLastParamTok = getLastToken(ast, lastParam) + 1;
-  // const after_last_param_tok = tree.lastToken(last_param) + 1;
-  // if (token_tags[after_last_param_tok] == .comma) {
-  //     ais.pushIndentNextLine();
-  //     try renderToken(r, lparen, .newline); // (
   el.push(<TokenDisplay token={lparen} />);
 
   for (const param of params) {
-    // if (i + 1 < params.length) {
     el.push(<Expression node={param} />);
     const comma = getLastToken(ast, param) + 1;
     if (getTokenTag(ast, comma) === TokenTag.Comma) {
@@ -1147,134 +534,34 @@ const ParamList = ({
 
   el.push(<TokenDisplay token={afterLastParamTok + 1} />);
   return el;
-  //     for (params, 0..) |param_node, i| {
-  //         if (i + 1 < params.len) {
-  //             try renderExpression(r, param_node, .none);
-  //
-  //             // Unindent the comma for multiline string literals.
-  //             const is_multiline_string =
-  //                 token_tags[tree.firstToken(param_node)] == .multiline_string_literal_line;
-  //             if (is_multiline_string) ais.popIndent();
-  //
-  //             const comma = tree.lastToken(param_node) + 1;
-  //             try renderToken(r, comma, .newline); // ,
-  //
-  //             if (is_multiline_string) ais.pushIndent();
-  //
-  //             try renderExtraNewline(r, params[i + 1]);
-  //         } else {
-  //             try renderExpression(r, param_node, .comma);
-  //         }
-  //     }
-  //     ais.popIndent();
-  //     return renderToken(r, after_last_param_tok + 1, space); // )
-  // }
-  //
-  // try renderToken(r, lparen, .none); // (
-  //
-  // for (params, 0..) |param_node, i| {
-  //     const first_param_token = tree.firstToken(param_node);
-  //     if (token_tags[first_param_token] == .multiline_string_literal_line or
-  //         hasSameLineComment(tree, first_param_token - 1))
-  //     {
-  //         ais.pushIndentOneShot();
-  //     }
-  //     try renderExpression(r, param_node, .none);
-  //
-  //     if (i + 1 < params.len) {
-  //         const comma = tree.lastToken(param_node) + 1;
-  //         const next_multiline_string =
-  //             token_tags[tree.firstToken(params[i + 1])] == .multiline_string_literal_line;
-  //         const comma_space: Space = if (next_multiline_string) .none else .space;
-  //         try renderToken(r, comma, comma_space);
-  //     }
-  // }
-  //
-  // return renderToken(r, after_last_param_tok, space); // )
-  //
-  // throw new Error("ParamList not implemented");
-};
-const Call = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <CallBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
 };
 
 const SliceBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const slice = fullSlice(ast, node);
   const el: JSX.Element[] = [];
-  // const tree = r.tree;
-  // const node_tags = tree.nodes.items(.tag);
-  // const after_start_space_bool = nodeCausesSliceOpSpace(node_tags[slice.ast.start]) or
-  //     if (slice.ast.end != 0) nodeCausesSliceOpSpace(node_tags[slice.ast.end]) else false;
-  // const after_start_space = if (after_start_space_bool) Space.space else Space.none;
-  // const after_dots_space = if (slice.ast.end != 0)
-  //     after_start_space
-  // else if (slice.ast.sentinel != 0) Space.space else Space.none;
-  //
-  // try renderExpression(r, slice.ast.sliced, .none);
-  // try renderToken(r, slice.ast.lbracket, .none); // lbracket
   el.push(<Expression node={slice.ast.sliced} />);
   el.push(<TokenDisplay token={slice.ast.lbracket} />);
-
-  // const start_last = tree.lastToken(slice.ast.start);
-  // try renderExpression(r, slice.ast.start, after_start_space);
-  // try renderToken(r, start_last + 1, after_dots_space); // ellipsis2 ("..")
   el.push(<Expression node={slice.ast.start} />);
   el.push(<TokenDisplay token={getLastToken(ast, slice.ast.start) + 1} />);
-  // if (slice.ast.end != 0) {
-  //     const after_end_space = if (slice.ast.sentinel != 0) Space.space else Space.none;
-  //     try renderExpression(r, slice.ast.end, after_end_space);
-  // }
   if (slice.ast.end !== 0) {
     el.push(<Expression node={slice.ast.end} />);
   }
-  // if (slice.ast.sentinel != 0) {
-  //     try renderToken(r, tree.firstToken(slice.ast.sentinel) - 1, .none); // colon
-  //     try renderExpression(r, slice.ast.sentinel, .none);
-  // }
-  //
   if (slice.ast.sentinel !== 0) {
     el.push(
       <TokenDisplay token={getFirstToken(ast, slice.ast.sentinel) - 1} />,
     );
     el.push(<Expression node={slice.ast.sentinel} />);
   }
-
-  // try renderToken(r, tree.lastToken(slice_node), space); // rbracket
   el.push(<TokenDisplay token={getLastToken(ast, node)} />);
 
   return el;
-};
-
-const Slice = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <SliceBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
 };
 
 const ContainerDeclBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const containerDecl = fullContainerDecl(ast, node);
   const el: JSX.Element[] = [];
-  // const tree = r.tree;
-  // const ais = r.ais;
-  // const token_tags = tree.tokens.items(.tag);
-  //
-  // if (container_decl.layout_token) |layout_token| {
-  //     try renderToken(r, layout_token, .space);
-  // }
   if (containerDecl.layout_token) {
     el.push(<TokenDisplay token={containerDecl.layout_token} />);
   }
@@ -1295,42 +582,7 @@ const ContainerDeclBody = ({ node }: NodeComponent) => {
       break;
     }
   }
-
-  // const container: Container = switch (token_tags[container_decl.ast.main_token]) {
-  //     .keyword_enum => .@"enum",
-  //     .keyword_struct => for (container_decl.ast.members) |member| {
-  //         if (tree.fullContainerField(member)) |field| if (!field.ast.tuple_like) break .other;
-  //     } else .tuple,
-  //     else => .other,
-  // };
   let lbrace: number;
-  // var lbrace: Ast.TokenIndex = undefined;
-  // if (container_decl.ast.enum_token) |enum_token| {
-  //     try renderToken(r, container_decl.ast.main_token, .none); // union
-  //     try renderToken(r, enum_token - 1, .none); // lparen
-  //     try renderToken(r, enum_token, .none); // enum
-  //     if (container_decl.ast.arg != 0) {
-  //         try renderToken(r, enum_token + 1, .none); // lparen
-  //         try renderExpression(r, container_decl.ast.arg, .none);
-  //         const rparen = tree.lastToken(container_decl.ast.arg) + 1;
-  //         try renderToken(r, rparen, .none); // rparen
-  //         try renderToken(r, rparen + 1, .space); // rparen
-  //         lbrace = rparen + 2;
-  //     } else {
-  //         try renderToken(r, enum_token + 1, .space); // rparen
-  //         lbrace = enum_token + 2;
-  //     }
-  // } else if (container_decl.ast.arg != 0) {
-  //     try renderToken(r, container_decl.ast.main_token, .none); // union
-  //     try renderToken(r, container_decl.ast.main_token + 1, .none); // lparen
-  //     try renderExpression(r, container_decl.ast.arg, .none);
-  //     const rparen = tree.lastToken(container_decl.ast.arg) + 1;
-  //     try renderToken(r, rparen, .space); // rparen
-  //     lbrace = rparen + 1;
-  // } else {
-  //     try renderToken(r, container_decl.ast.main_token, .space); // union
-  //     lbrace = container_decl.ast.main_token + 1;
-  // }
   if (containerDecl.ast.enum_token) {
     el.push(<TokenDisplay token={containerDecl.ast.main_token} />);
     el.push(<TokenDisplay token={containerDecl.ast.enum_token - 1} />);
@@ -1359,18 +611,6 @@ const ContainerDeclBody = ({ node }: NodeComponent) => {
   }
 
   const rbrace = getLastToken(ast, node);
-  // const rbrace = tree.lastToken(container_decl_node);
-  // if (container_decl.ast.members.len == 0) {
-  //     ais.pushIndentNextLine();
-  //     if (token_tags[lbrace + 1] == .container_doc_comment) {
-  //         try renderToken(r, lbrace, .newline); // lbrace
-  //         try renderContainerDocComments(r, lbrace + 1);
-  //     } else {
-  //         try renderToken(r, lbrace, .none); // lbrace
-  //     }
-  //     ais.popIndent();
-  //     return renderToken(r, rbrace, space); // rbrace
-  // }
   if (containerDecl.ast.members.length === 0) {
     el.push(<TokenDisplay token={lbrace} />);
     if (getTokenTag(ast, lbrace + 1) === TokenTag.ContainerDocComment) {
@@ -1380,61 +620,11 @@ const ContainerDeclBody = ({ node }: NodeComponent) => {
     return el;
   }
 
-  // const src_has_trailing_comma = token_tags[rbrace - 1] == .comma;
-  // if (!src_has_trailing_comma) one_line: {
-  //     // We print all the members in-line unless one of the following conditions are true:
-  //
-  //     // 1. The container has comments or multiline strings.
-  //     if (hasComment(tree, lbrace, rbrace) or hasMultilineString(tree, lbrace, rbrace)) {
-  //         break :one_line;
-  //     }
-  //
-  //     // 2. The container has a container comment.
-  //     if (token_tags[lbrace + 1] == .container_doc_comment) break :one_line;
-  //
-  //     // 3. A member of the container has a doc comment.
-  //     for (token_tags[lbrace + 1 .. rbrace - 1]) |tag| {
-  //         if (tag == .doc_comment) break :one_line;
-  //     }
-  //
-  //     // 4. The container has non-field members.
-  //     for (container_decl.ast.members) |member| {
-  //         if (tree.fullContainerField(member) == null) break :one_line;
-  //     }
-  //
-  //     // Print all the declarations on the same line.
-  //     try renderToken(r, lbrace, .space); // lbrace
-  //     for (container_decl.ast.members) |member| {
-  //         try renderMember(r, container, member, .space);
-  //     }
-  //     return renderToken(r, rbrace, space); // rbrace
-  // }
-  //
-  // // One member per line.
-  const srcHasTrailingComma = getTokenTag(ast, rbrace - 1) === TokenTag.Comma;
-
-  // ais.pushIndentNextLine();
   el.push(<TokenDisplay token={lbrace} />);
-  // try renderToken(r, lbrace, .newline); // lbrace
-  // if (token_tags[lbrace + 1] == .container_doc_comment) {
-  //     try renderContainerDocComments(r, lbrace + 1);
-  // }
   if (getTokenTag(ast, lbrace + 1) === TokenTag.ContainerDocComment) {
     el.push(<TokenDisplay token={lbrace + 1} />);
   }
 
-  // for (container_decl.ast.members, 0..) |member, i| {
-  //     if (i != 0) try renderExtraNewline(r, member);
-  //     switch (tree.nodes.items(.tag)[member]) {
-  //         // For container fields, ensure a trailing comma is added if necessary.
-  //         .container_field_init,
-  //         .container_field_align,
-  //         .container_field,
-  //         => try renderMember(r, container, member, .comma),
-  //
-  //         else => try renderMember(r, container, member, .newline),
-  //     }
-  // }
   for (const member of containerDecl.ast.members) {
     switch (getNodeTag(ast, member)) {
       case AstNodeTag.ContainerFieldInit:
@@ -1449,43 +639,12 @@ const ContainerDeclBody = ({ node }: NodeComponent) => {
       }
     }
   }
-  // ais.popIndent();
-  //
-  // return renderToken(r, rbrace, space); // rbrace
   el.push(<TokenDisplay token={rbrace} />);
 
   return el;
 };
 
-const ContainerDecl = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <ContainerDeclBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
 const BuiltinCallBody = ({ node }: NodeComponent) => {
-  // }
-  // //         .builtin_call_two, .builtin_call_two_comma => {
-  // //             if (datas[node].lhs == 0) {
-  // //                 return renderBuiltinCall(r, main_tokens[node], &.{}, space);
-  // //             } else if (datas[node].rhs == 0) {
-  // //                 return renderBuiltinCall(r, main_tokens[node], &.{datas[node].lhs}, space);
-  // //             } else {
-  // //                 return renderBuiltinCall(r, main_tokens[node], &.{ datas[node].lhs, datas[node].rhs }, space);
-  // //             }
-  // //         },
-  // case AstNodeTag.BuiltinCallTwo:
-  // case AstNodeTag.BuiltinCallTwoComma: {
-  //   throw new Error("BuiltinCallTwo not implemented");
-  // }
-  // //         .builtin_call, .builtin_call_comma => {
-  // //             const params = tree.extra_data[datas[node].lhs..datas[node].rhs];
-  // //             return renderBuiltinCall(r, main_tokens[node], params, space);
-  // //         },
   const { ast } = useAst();
   const data = getNodeData(ast, node);
   const tag = getNodeTag(ast, node);
@@ -1505,76 +664,12 @@ const BuiltinCallBody = ({ node }: NodeComponent) => {
   }, [ast, node]);
   const el: JSX.Element[] = [];
 
-  // try renderToken(r, builtin_token, .none); // @name
   el.push(<TokenDisplay token={builtinToken} />);
   if (params.length === 0) {
     el.push(<TokenDisplay token={builtinToken + 1} />);
     el.push(<TokenDisplay token={builtinToken + 2} />);
     return el;
   }
-
-  // if (params.len == 0) {
-  //     try renderToken(r, builtin_token + 1, .none); // (
-  //     return renderToken(r, builtin_token + 2, space); // )
-  // }
-  //
-  // if (r.fixups.rebase_imported_paths) |prefix| {
-  //     const slice = tree.tokenSlice(builtin_token);
-  //     if (mem.eql(u8, slice, "@import")) f: {
-  //         const param = params[0];
-  //         const str_lit_token = main_tokens[param];
-  //         assert(token_tags[str_lit_token] == .string_literal);
-  //         const token_bytes = tree.tokenSlice(str_lit_token);
-  //         const imported_string = std.zig.string_literal.parseAlloc(r.gpa, token_bytes) catch |err| switch (err) {
-  //             error.OutOfMemory => return error.OutOfMemory,
-  //             error.InvalidLiteral => break :f,
-  //         };
-  //         defer r.gpa.free(imported_string);
-  //         const new_string = try std.fs.path.resolvePosix(r.gpa, &.{ prefix, imported_string });
-  //         defer r.gpa.free(new_string);
-  //
-  //         try renderToken(r, builtin_token + 1, .none); // (
-  //         try ais.writer().print("\"{}\"", .{std.zig.fmtEscapes(new_string)});
-  //         return renderToken(r, str_lit_token + 1, space); // )
-  //     }
-  // }
-  //
-  // const last_param = params[params.len - 1];
-  // const after_last_param_token = tree.lastToken(last_param) + 1;
-  //
-  // if (token_tags[after_last_param_token] != .comma) {
-  //     // Render all on one line, no trailing comma.
-  //     try renderToken(r, builtin_token + 1, .none); // (
-  //
-  //     for (params, 0..) |param_node, i| {
-  //         const first_param_token = tree.firstToken(param_node);
-  //         if (token_tags[first_param_token] == .multiline_string_literal_line or
-  //             hasSameLineComment(tree, first_param_token - 1))
-  //         {
-  //             ais.pushIndentOneShot();
-  //         }
-  //         try renderExpression(r, param_node, .none);
-  //
-  //         if (i + 1 < params.len) {
-  //             const comma_token = tree.lastToken(param_node) + 1;
-  //             try renderToken(r, comma_token, .space); // ,
-  //         }
-  //     }
-  //     return renderToken(r, after_last_param_token, space); // )
-  // } else {
-  //     // Render one param per line.
-  //     ais.pushIndent();
-  //     try renderToken(r, builtin_token + 1, Space.newline); // (
-  //
-  //     for (params) |param_node| {
-  //         try renderExpression(r, param_node, .comma);
-  //     }
-  //     ais.popIndent();
-  //
-  //     return renderToken(r, after_last_param_token + 1, space); // )
-  // }
-  // return getExtraDataSpan(ast, data.lhs, data.rhs);
-  //
   el.push(<TokenDisplay token={builtinToken + 1} />); // (
 
   for (const param of params) {
@@ -1591,62 +686,10 @@ const BuiltinCallBody = ({ node }: NodeComponent) => {
   return el;
 };
 
-const BuiltinCall = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <BuiltinCallBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
-// fn hasComment(tree: Ast, start_token: Ast.TokenIndex, end_token: Ast.TokenIndex) bool {
-//     const token_starts = tree.tokens.items(.start);
-//
-//     var i = start_token;
-//     while (i < end_token) : (i += 1) {
-//         const start = token_starts[i] + tree.tokenSlice(i).len;
-//         const end = token_starts[i + 1];
-//         if (mem.indexOf(u8, tree.source[start..end], "//") != null) return true;
-//     }
-//
-//     return false;
-// }
-const hasComment = (
-  ast: number,
-  startToken: number,
-  endToken: number,
-  source: string,
-) => {
-  let i = startToken;
-  while (i < endToken) {
-    const start = getTokenStart(ast, i) + tokenSlice(ast, i).length;
-    const end = getTokenStart(ast, i + 1);
-    if (source.slice(start, end).indexOf("//") !== -1) return true;
-  }
-  return false;
-};
-
 const SwitchCaseBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const switchCase = fullSwitchCase(ast, node);
   const el: JSX.Element[] = [];
-  //
-  // const tree = r.tree;
-  // const node_tags = tree.nodes.items(.tag);
-  // const token_tags = tree.tokens.items(.tag);
-  // const trailing_comma = token_tags[switch_case.ast.arrow_token - 1] == .comma;
-  // const has_comment_before_arrow = blk: {
-  //     if (switch_case.ast.values.len == 0) break :blk false;
-  //     break :blk hasComment(tree, tree.firstToken(switch_case.ast.values[0]), switch_case.ast.arrow_token);
-  // };
-  // const hasCommentBeforeArrow = switchCase.ast.values.length === 0;
-  // // render inline keyword
-  // if (switch_case.inline_token) |some| {
-  //     try renderToken(r, some, .space);
-  // }
   if (switchCase.inline_token)
     el.push(<TokenDisplay token={switchCase.inline_token} />);
 
@@ -1658,26 +701,6 @@ const SwitchCaseBody = ({ node }: NodeComponent) => {
       el.push(<Expression node={value} />);
     }
   }
-  // if (switch_case.ast.values.len == 0) {
-  //     try renderToken(r, switch_case.ast.arrow_token - 1, .space); // else keyword
-  // } else if (trailing_comma or has_comment_before_arrow) {
-  //     // Render each value on a new line
-  //     try renderExpressions(r, switch_case.ast.values, .comma);
-  // } else {
-  //     // Render on one line
-  //     for (switch_case.ast.values) |value_expr| {
-  //         try renderExpression(r, value_expr, .comma_space);
-  //     }
-  // }
-  //
-  // // Render the arrow and everything after it
-  // const pre_target_space = if (node_tags[switch_case.ast.target_expr] == .multiline_string_literal)
-  //     // Newline gets inserted when rendering the target expr.
-  //     Space.none
-  // else
-  //     Space.space;
-  // const after_arrow_space: Space = if (switch_case.payload_token == null) pre_target_space else .space;
-  // try renderToken(r, switch_case.ast.arrow_token, after_arrow_space); // =>
   el.push(<TokenDisplay token={switchCase.ast.arrow_token} />);
   if (switchCase.payload_token) {
     el.push(<TokenDisplay token={switchCase.payload_token - 1} />);
@@ -1698,23 +721,6 @@ const SwitchCaseBody = ({ node }: NodeComponent) => {
 
   el.push(<Expression node={switchCase.ast.target_expr} />);
   return el;
-  // if (switch_case.payload_token) |payload_token| {
-  //     try renderToken(r, payload_token - 1, .none); // pipe
-  //     const ident = payload_token + @intFromBool(token_tags[payload_token] == .asterisk);
-  //     if (token_tags[payload_token] == .asterisk) {
-  //         try renderToken(r, payload_token, .none); // asterisk
-  //     }
-  //     try renderIdentifier(r, ident, .none, .preserve_when_shadowing); // identifier
-  //     if (token_tags[ident + 1] == .comma) {
-  //         try renderToken(r, ident + 1, .space); // ,
-  //         try renderIdentifier(r, ident + 2, .none, .preserve_when_shadowing); // identifier
-  //         try renderToken(r, ident + 3, pre_target_space); // pipe
-  //     } else {
-  //         try renderToken(r, ident + 1, pre_target_space); // pipe
-  //     }
-  // }
-  //
-  // try renderExpression(r, switch_case.ast.target_expr, space);
 };
 
 const SwitchCase = ({ node }: NodeComponent) => {
@@ -1727,16 +733,6 @@ const SwitchCase = ({ node }: NodeComponent) => {
     </NodeDisplay>
   );
 };
-// fn nodeIsBlock(tag: Ast.Node.Tag) bool {
-//     return switch (tag) {
-//         .block,
-//         .block_semicolon,
-//         .block_two,
-//         .block_two_semicolon,
-//         => true,
-//         else => false,
-//     };
-// }
 const nodeIsBlock = (ast: number, node: number) => {
   const tag = getNodeTag(ast, node);
   return (
@@ -1746,22 +742,6 @@ const nodeIsBlock = (ast: number, node: number) => {
     tag === AstNodeTag.BlockTwoSemicolon
   );
 };
-//
-// fn nodeIsIfForWhileSwitch(tag: Ast.Node.Tag) bool {
-//     return switch (tag) {
-//         .@"if",
-//         .if_simple,
-//         .@"for",
-//         .for_simple,
-//         .@"while",
-//         .while_simple,
-//         .while_cont,
-//         .@"switch",
-//         .switch_comma,
-//         => true,
-//         else => false,
-//     };
-// }
 const nodeIsIfForWhileSwitch = (ast: number, node: number) => {
   const tag = getNodeTag(ast, node);
   return (
@@ -1776,10 +756,6 @@ const nodeIsIfForWhileSwitch = (ast: number, node: number) => {
     tag === AstNodeTag.SwitchComma
   );
 };
-//
-// const ThenElse = ({ node }: NodeComponent) => {
-//   throw new Error("ThenElse not implemented");
-// };
 const WhileOrIf = ({
   full: whileNode,
   node,
@@ -1854,71 +830,8 @@ const WhileOrIf = ({
 
 const WhileBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const whileNode = whileFull(ast, node);
+  const whileNode = fullWhile(ast, node);
   return <WhileOrIf full={whileNode} node={node} />;
-  // const el: JSX.Element[] = [];
-  // if (whileNode.label_token) {
-  //   el.push(<TokenDisplay token={whileNode.label_token} />);
-  //   el.push(<TokenDisplay token={whileNode.label_token + 1} />);
-  // }
-  // if (whileNode.inline_token) {
-  //   el.push(<TokenDisplay token={whileNode.inline_token} />);
-  // }
-  // el.push(<TokenDisplay token={whileNode.ast.while_token} />);
-  // el.push(<TokenDisplay token={whileNode.ast.while_token + 1} />);
-  // el.push(<Expression node={whileNode.ast.cond_expr} />);
-  // let lastPrefixToken = getLastToken(ast, whileNode.ast.cond_expr) + 1; //rparen
-  //
-  // if (whileNode.payload_token) {
-  //   el.push(<TokenDisplay token={lastPrefixToken} />);
-  //   el.push(<TokenDisplay token={whileNode.payload_token - 1} />);
-  //   let ident = whileNode.payload_token;
-  //   if (getTokenTag(ast, whileNode.payload_token) === TokenTag.Asterisk) {
-  //     el.push(<TokenDisplay token={whileNode.payload_token} />);
-  //     ident += 1;
-  //   }
-  //   el.push(<TokenDisplay token={ident} />);
-  //   let pipe = ident + 1;
-  //   if (getTokenTag(ast, ident + 1) === TokenTag.Comma) {
-  //     el.push(<TokenDisplay token={ident + 1} />);
-  //     el.push(<TokenDisplay token={ident + 2} />);
-  //     pipe = ident + 3;
-  //   }
-  //   lastPrefixToken = pipe;
-  // }
-  //
-  // while (whileNode.ast.cont_expr != 0) {
-  //   el.push(<TokenDisplay token={lastPrefixToken} />);
-  //   const lparen = getFirstToken(ast, whileNode.ast.cont_expr) - 1;
-  //   el.push(<TokenDisplay token={lparen - 1} />);
-  //   el.push(<TokenDisplay token={lparen} />);
-  //   el.push(<Expression node={whileNode.ast.cont_expr} />);
-  //   lastPrefixToken = getLastToken(ast, whileNode.ast.cont_expr) + 1; // rparen
-  // }
-  // // THEN ELSE
-  // const thenExpr = whileNode.ast.then_expr;
-  // const elseToken = whileNode.else_token;
-  // const maybeErrorToken = whileNode.error_token;
-  // const elseExpr = whileNode.ast.else_expr;
-  //
-  // el.push(<TokenDisplay token={lastPrefixToken} />);
-  // if (elseExpr !== 0) {
-  //   el.push(<Expression node={thenExpr} />);
-  //
-  //   let lastElseToken = elseToken;
-  //
-  //   if (maybeErrorToken) {
-  //     el.push(<TokenDisplay token={elseToken} />);
-  //     el.push(<TokenDisplay token={maybeErrorToken - 1} />);
-  //     el.push(<TokenDisplay token={maybeErrorToken} />);
-  //     lastElseToken = maybeErrorToken + 1;
-  //   }
-  //   el.push(<TokenDisplay token={lastElseToken} />);
-  //   el.push(<Expression node={elseExpr} />);
-  // } else {
-  //   el.push(<Expression node={thenExpr} />);
-  // }
-  // return el;
 };
 
 const While = ({ node }: NodeComponent) => {
@@ -1934,44 +847,24 @@ const While = ({ node }: NodeComponent) => {
 
 const ForBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const forNode = forFull(ast, node);
+  const forNode = fullFor(ast, node);
   const el = [];
-  //
-  // const tree = r.tree;
-  // const ais = r.ais;
-  // const token_tags = tree.tokens.items(.tag);
-
-  // if (for_node.label_token) |label| {
-  //     try renderIdentifier(r, label, .none, .eagerly_unquote); // label
-  //     try renderToken(r, label + 1, .space); // :
-  // }
   if (forNode.label_token) {
     el.push(<TokenDisplay token={forNode.label_token} />);
     el.push(<TokenDisplay token={forNode.label_token + 1} />);
   }
-  // if (for_node.inline_token) |inline_token| {
-  //     try renderToken(r, inline_token, .space); // inline
-  // }
   if (forNode.inline_token) {
     el.push(<TokenDisplay token={forNode.inline_token} />);
   }
-  // try renderToken(r, for_node.ast.for_token, .space); // if/for/while
   el.push(<TokenDisplay token={forNode.ast.for_token} />);
-  // const lparen = for_node.ast.for_token + 1;
-  // try renderParamList(r, lparen, for_node.ast.inputs, .space);
   const lparen = forNode.ast.for_token + 1;
-  // var cur = for_node.payload_token;
   let cur = forNode.payload_token;
-  // const pipe = std.mem.indexOfScalarPos(std.zig.Token.Tag, token_tags, cur, .pipe).?;
   const pipe = cur;
   const tokensLen = getTokensLength(ast);
   while (getTokenTag(ast, cur) !== TokenTag.Pipe || cur < tokensLen) {
     cur += 1;
   }
 
-  // if (token_tags[pipe - 1] == .comma) {
-  //     ais.pushIndentNextLine();
-  //     try renderToken(r, cur - 1, .newline); // |
   el.push(<TokenDisplay token={cur - 1} />);
   while (true) {
     if (getTokenTag(ast, cur) === TokenTag.Asterisk) {
@@ -1988,50 +881,6 @@ const ForBody = ({ node }: NodeComponent) => {
       break;
     }
   }
-  //     while (true) {
-  //         if (token_tags[cur] == .asterisk) {
-  //             try renderToken(r, cur, .none); // *
-  //             cur += 1;
-  //         }
-  //         try renderIdentifier(r, cur, .none, .preserve_when_shadowing); // identifier
-  //         cur += 1;
-  //         if (token_tags[cur] == .comma) {
-  //             try renderToken(r, cur, .newline); // ,
-  //             cur += 1;
-  //         }
-  //         if (token_tags[cur] == .pipe) {
-  //             break;
-  //         }
-  //     }
-  //     ais.popIndent();
-  // } else {
-  //     try renderToken(r, cur - 1, .none); // |
-  //     while (true) {
-  //         if (token_tags[cur] == .asterisk) {
-  //             try renderToken(r, cur, .none); // *
-  //             cur += 1;
-  //         }
-  //         try renderIdentifier(r, cur, .none, .preserve_when_shadowing); // identifier
-  //         cur += 1;
-  //         if (token_tags[cur] == .comma) {
-  //             try renderToken(r, cur, .space); // ,
-  //             cur += 1;
-  //         }
-  //         if (token_tags[cur] == .pipe) {
-  //             break;
-  //         }
-  //     }
-  // }
-  //
-  // try renderThenElse(
-  //     r,
-  //     cur,
-  //     for_node.ast.then_expr,
-  //     for_node.else_token,
-  //     null,
-  //     for_node.ast.else_expr,
-  //     space,
-  // );
   // THEN ELSE
   const lastPrefixToken = cur;
   const thenExpr = forNode.ast.then_expr;
@@ -2052,36 +901,12 @@ const ForBody = ({ node }: NodeComponent) => {
   return el;
 };
 
-const For = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <ForBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
 const IfBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const ifNode = ifFull(ast, node);
+  const ifNode = fullIf(ast, node);
   return (
     <WhileOrIf
       full={{
-        // .ast = .{
-        //     .while_token = if_node.ast.if_token,
-        //     .cond_expr = if_node.ast.cond_expr,
-        //     .cont_expr = 0,
-        //     .then_expr = if_node.ast.then_expr,
-        //     .else_expr = if_node.ast.else_expr,
-        // },
-        // .inline_token = null,
-        // .label_token = null,
-        // .payload_token = if_node.payload_token,
-        // .else_token = if_node.else_token,
-        // .error_token = if_node.error_token,
-
         ast: {
           while_token: ifNode.ast.if_token,
           cond_expr: ifNode.ast.cond_expr,
@@ -2100,17 +925,6 @@ const IfBody = ({ node }: NodeComponent) => {
   );
 };
 
-const If = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <IfBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
 const AsmInput = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const data = getNodeData(ast, node);
@@ -2126,8 +940,6 @@ const AsmInput = ({ node }: NodeComponent) => {
   el.push(<TokenDisplay token={data.rhs} />);
 
   return <NodeDisplay node={node}>{el}</NodeDisplay>;
-
-  // return el;
 };
 const AsmOutput = ({ node }: NodeComponent) => {
   const { ast } = useAst();
@@ -2135,29 +947,6 @@ const AsmOutput = ({ node }: NodeComponent) => {
   const symbolicName = getMainToken(ast, node);
   const el: JSX.Element[] = [];
 
-  // const tree = r.tree;
-  // const token_tags = tree.tokens.items(.tag);
-  // const node_tags = tree.nodes.items(.tag);
-  // const main_tokens = tree.nodes.items(.main_token);
-  // const datas = tree.nodes.items(.data);
-  // assert(node_tags[asm_output] == .asm_output);
-  // const symbolic_name = main_tokens[asm_output];
-  //
-  // try renderToken(r, symbolic_name - 1, .none); // lbracket
-  // try renderIdentifier(r, symbolic_name, .none, .eagerly_unquote); // ident
-  // try renderToken(r, symbolic_name + 1, .space); // rbracket
-  // try renderToken(r, symbolic_name + 2, .space); // "constraint"
-  // try renderToken(r, symbolic_name + 3, .none); // lparen
-  //
-  // if (token_tags[symbolic_name + 4] == .arrow) {
-  //     try renderToken(r, symbolic_name + 4, .space); // ->
-  //     try renderExpression(r, datas[asm_output].lhs, Space.none);
-  //     return renderToken(r, datas[asm_output].rhs, space); // rparen
-  // } else {
-  //     try renderIdentifier(r, symbolic_name + 4, .none, .eagerly_unquote); // ident
-  //     return renderToken(r, symbolic_name + 5, space); // rparen
-  // }
-  //
   el.push(<TokenDisplay token={symbolicName - 1} />);
   el.push(<TokenDisplay token={symbolicName} />);
   el.push(<TokenDisplay token={symbolicName + 1} />);
@@ -2177,22 +966,7 @@ const AsmBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const asmNode = fullAsm(ast, node);
   const el: JSX.Element[] = [];
-
-  // debugger
-  //
-  //   const tree = r.tree;
-  //   const ais = r.ais;
-  //   const token_tags = tree.tokens.items(.tag);
-  //
-  //   try renderToken(r, asm_node.ast.asm_token, .space); // asm
   el.push(<TokenDisplay token={asmNode.ast.asm_token} />);
-
-  //   if (asm_node.volatile_token) |volatile_token| {
-  //       try renderToken(r, volatile_token, .space); // volatile
-  //       try renderToken(r, volatile_token + 1, .none); // lparen
-  //   } else {
-  //       try renderToken(r, asm_node.ast.asm_token + 1, .none); // lparen
-  //   }
   if (asmNode.volatile_token) {
     el.push(<TokenDisplay token={asmNode.volatile_token} />);
     el.push(<TokenDisplay token={asmNode.volatile_token + 1} />);
@@ -2233,61 +1007,6 @@ const AsmBody = ({ node }: NodeComponent) => {
       return el;
     }
   }
-  // Examples
-  // asm ("foo" ::: "a", "b")
-  // asm ("foo" ::: "a", "b",)
-  //
-  // const quo = asm(
-  // \\divq % [v]
-  //           : [_] "={rax}"(-> T),
-  // [_] "={rdx}"(rem),
-  //           : [v] "r"(v),
-  // [_] "{rax}"(_u0),
-  //   [_] "{rdx}"(_u1),
-  // );
-  //
-
-  //   if (asm_node.ast.items.len == 0) {
-  //       ais.pushIndent();
-  //       if (asm_node.first_clobber) |first_clobber| {
-  //           try renderExpression(r, asm_node.ast.template, .space);
-  //           // Render the three colons.
-  //           try renderToken(r, first_clobber - 3, .none);
-  //           try renderToken(r, first_clobber - 2, .none);
-  //           try renderToken(r, first_clobber - 1, .space);
-  //
-  //           var tok_i = first_clobber;
-  //           while (true) : (tok_i += 1) {
-  //               try renderToken(r, tok_i, .none);
-  //               tok_i += 1;
-  //               switch (token_tags[tok_i]) {
-  //                   .r_paren => {
-  //                       ais.popIndent();
-  //                       return renderToken(r, tok_i, space);
-  //                   },
-  //                   .comma => {
-  //                       if (token_tags[tok_i + 1] == .r_paren) {
-  //                           ais.popIndent();
-  //                           return renderToken(r, tok_i + 1, space);
-  //                       } else {
-  //                           try renderToken(r, tok_i, .space);
-  //                       }
-  //                   },
-  //                   else => unreachable,
-  //               }
-  //           }
-  //       } else {
-  //           // asm ("foo")
-  //           try renderExpression(r, asm_node.ast.template, .none);
-  //           ais.popIndent();
-  //           return renderToken(r, asm_node.ast.rparen, space); // rparen
-  //       }
-  //   }
-  //
-  //   ais.pushIndent();
-  //   try renderExpression(r, asm_node.ast.template, .newline);
-  //   ais.setIndentDelta(asm_indent_delta);
-  //   const colon1 = tree.lastToken(asm_node.ast.template) + 1;
   el.push(<Expression node={asmNode.ast.template} />);
   let colon1 = getLastToken(ast, asmNode.ast.template) + 1;
   let colon2: number;
@@ -2327,39 +1046,6 @@ const AsmBody = ({ node }: NodeComponent) => {
       }
       throw new Error("unreachable");
     }
-  //   const colon2 = if (asm_node.outputs.len == 0) colon2: {
-  //       try renderToken(r, colon1, .newline); // :
-  //       break :colon2 colon1 + 1;
-  //   } else colon2: {
-  //       try renderToken(r, colon1, .space); // :
-  //
-  //       ais.pushIndent();
-  //       for (asm_node.outputs, 0..) |asm_output, i| {
-  //           if (i + 1 < asm_node.outputs.len) {
-  //               const next_asm_output = asm_node.outputs[i + 1];
-  //               try renderAsmOutput(r, asm_output, .none);
-  //
-  //               const comma = tree.firstToken(next_asm_output) - 1;
-  //               try renderToken(r, comma, .newline); // ,
-  //               try renderExtraNewlineToken(r, tree.firstToken(next_asm_output));
-  //           } else if (asm_node.inputs.len == 0 and asm_node.first_clobber == null) {
-  //               try renderAsmOutput(r, asm_output, .comma);
-  //               ais.popIndent();
-  //               ais.setIndentDelta(indent_delta);
-  //               ais.popIndent();
-  //               return renderToken(r, asm_node.ast.rparen, space); // rparen
-  //           } else {
-  //               try renderAsmOutput(r, asm_output, .comma);
-  //               const comma_or_colon = tree.lastToken(asm_output) + 1;
-  //               ais.popIndent();
-  //               break :colon2 switch (token_tags[comma_or_colon]) {
-  //                   .comma => comma_or_colon + 1,
-  //                   else => comma_or_colon,
-  //               };
-  //           }
-  //       } else unreachable;
-  //   };
-
   let colon3: number;
   if (asmNode.inputs.length === 0) {
     el.push(<TokenDisplay token={colon2} />);
@@ -2392,71 +1078,9 @@ const AsmBody = ({ node }: NodeComponent) => {
     }
     throw new Error("unreachable");
   }
-  //   const colon3 = if (asm_node.inputs.len == 0) colon3: {
-  //       try renderToken(r, colon2, .newline); // :
-  //       break :colon3 colon2 + 1;
-  //   } else colon3: {
-  //       try renderToken(r, colon2, .space); // :
-  //       ais.pushIndent();
-  //       for (asm_node.inputs, 0..) |asm_input, i| {
-  //           if (i + 1 < asm_node.inputs.len) {
-  //               const next_asm_input = asm_node.inputs[i + 1];
-  //               try renderAsmInput(r, asm_input, .none);
-  //
-  //               const first_token = tree.firstToken(next_asm_input);
-  //               try renderToken(r, first_token - 1, .newline); // ,
-  //               try renderExtraNewlineToken(r, first_token);
-  //           } else if (asm_node.first_clobber == null) {
-  //               try renderAsmInput(r, asm_input, .comma);
-  //               ais.popIndent();
-  //               ais.setIndentDelta(indent_delta);
-  //               ais.popIndent();
-  //               return renderToken(r, asm_node.ast.rparen, space); // rparen
-  //           } else {
-  //               try renderAsmInput(r, asm_input, .comma);
-  //               const comma_or_colon = tree.lastToken(asm_input) + 1;
-  //               ais.popIndent();
-  //               break :colon3 switch (token_tags[comma_or_colon]) {
-  //                   .comma => comma_or_colon + 1,
-  //                   else => comma_or_colon,
-  //               };
-  //           }
-  //       }
-  //       unreachable;
-  //   };
-  //   try renderToken(r, colon3, .space); // :
   el.push(<TokenDisplay token={colon3} />);
-  //   const first_clobber = asm_node.first_clobber.?;
   const firstClobber = asmNode.first_clobber;
   if (!firstClobber) throw new Error("unreachable");
-
-  //   var tok_i = first_clobber;
-  //   while (true) {
-  //       switch (token_tags[tok_i + 1]) {
-  //           .r_paren => {
-  //               ais.setIndentDelta(indent_delta);
-  //               ais.popIndent();
-  //               try renderToken(r, tok_i, .newline);
-  //               return renderToken(r, tok_i + 1, space);
-  //           },
-  //           .comma => {
-  //               switch (token_tags[tok_i + 2]) {
-  //                   .r_paren => {
-  //                       ais.setIndentDelta(indent_delta);
-  //                       ais.popIndent();
-  //                       try renderToken(r, tok_i, .newline);
-  //                       return renderToken(r, tok_i + 2, space);
-  //                   },
-  //                   else => {
-  //                       try renderToken(r, tok_i, .none);
-  //                       try renderToken(r, tok_i + 1, .space);
-  //                       tok_i += 2;
-  //                   },
-  //               }
-  //           },
-  //           else => unreachable,
-  //       }
-  //   }
   let tokI = firstClobber;
 
   while (true) {
@@ -2476,24 +1100,6 @@ const AsmBody = ({ node }: NodeComponent) => {
   }
 };
 
-const Asm = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
-        <AsmBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
-// pub fn convertToNonTupleLike(cf: *ContainerField, nodes: NodeList.Slice) void {
-//     if (!cf.ast.tuple_like) return;
-//     if (nodes.items(.tag)[cf.ast.type_expr] != .identifier) return;
-//
-//     cf.ast.type_expr = 0;
-//     cf.ast.tuple_like = false;
-// }
 const convertToNonTupleLike = (ast: number, cf: AstfullContainerField) => {
   if (!cf.ast.tuple_like) return cf;
   if (getNodeTag(ast, cf.ast.type_expr) !== AstNodeTag.Identifier) return cf;
@@ -2508,20 +1114,7 @@ const ContainerFieldBody = ({
   const { ast } = useAst();
   const el: JSX.Element[] = [];
   let field = fullContainerField(ast, node);
-
-  // const tree = r.tree;
-  // const ais = r.ais;
-  // var field = field_param;
-  // if (container != .tuple) field.convertToNonTupleLike(tree.nodes);
   if (container !== "tuple") field = convertToNonTupleLike(ast, field);
-  // const quote: QuoteBehavior = switch (container) {
-  //     .@"enum" => .eagerly_unquote_except_underscore,
-  //     .tuple, .other => .eagerly_unquote,
-  // };
-  //
-  // if (field.comptime_token) |t| {
-  //     try renderToken(r, t, .space); // comptime
-  // }
   const renderExpressionComma = (
     el: JSX.Element[],
     ast: number,
@@ -2543,19 +1136,6 @@ const ContainerFieldBody = ({
   if (field.comptime_token) {
     el.push(<TokenDisplay token={field.comptime_token} />);
   }
-  // if (field.ast.type_expr == 0 and field.ast.value_expr == 0) {
-  //     if (field.ast.align_expr != 0) {
-  //         try renderIdentifier(r, field.ast.main_token, .space, quote); // name
-  //         const lparen_token = tree.firstToken(field.ast.align_expr) - 1;
-  //         const align_kw = lparen_token - 1;
-  //         const rparen_token = tree.lastToken(field.ast.align_expr) + 1;
-  //         try renderToken(r, align_kw, .none); // align
-  //         try renderToken(r, lparen_token, .none); // (
-  //         try renderExpression(r, field.ast.align_expr, .none); // alignment
-  //         return renderToken(r, rparen_token, .space); // )
-  //     }
-  //     return renderIdentifierComma(r, field.ast.main_token, space, quote); // name
-  // }
   if (field.ast.type_expr === 0 && field.ast.value_expr === 0) {
     if (field.ast.align_expr !== 0) {
       el.push(<TokenDisplay token={field.ast.main_token} />);
@@ -2571,24 +1151,6 @@ const ContainerFieldBody = ({
     renderTokenComma(el, ast, field.ast.main_token);
     return el;
   }
-  // if (field.ast.type_expr != 0 and field.ast.value_expr == 0) {
-  //     if (!field.ast.tuple_like) {
-  //         try renderIdentifier(r, field.ast.main_token, .none, quote); // name
-  //         try renderToken(r, field.ast.main_token + 1, .space); // :
-  //     }
-  //
-  //     if (field.ast.align_expr != 0) {
-  //         try renderExpression(r, field.ast.type_expr, .space); // type
-  //         const align_token = tree.firstToken(field.ast.align_expr) - 2;
-  //         try renderToken(r, align_token, .none); // align
-  //         try renderToken(r, align_token + 1, .none); // (
-  //         try renderExpression(r, field.ast.align_expr, .none); // alignment
-  //         const rparen = tree.lastToken(field.ast.align_expr) + 1;
-  //         return renderTokenComma(r, rparen, space); // )
-  //     } else {
-  //         return renderExpressionComma(r, field.ast.type_expr, space); // type
-  //     }
-  // }
 
   if (field.ast.type_expr !== 0 && field.ast.value_expr === 0) {
     if (!field.ast.tuple_like) {
@@ -2608,20 +1170,6 @@ const ContainerFieldBody = ({
     }
     return el;
   }
-  // if (field.ast.type_expr == 0 and field.ast.value_expr != 0) {
-  //     try renderIdentifier(r, field.ast.main_token, .space, quote); // name
-  //     if (field.ast.align_expr != 0) {
-  //         const lparen_token = tree.firstToken(field.ast.align_expr) - 1;
-  //         const align_kw = lparen_token - 1;
-  //         const rparen_token = tree.lastToken(field.ast.align_expr) + 1;
-  //         try renderToken(r, align_kw, .none); // align
-  //         try renderToken(r, lparen_token, .none); // (
-  //         try renderExpression(r, field.ast.align_expr, .none); // alignment
-  //         try renderToken(r, rparen_token, .space); // )
-  //     }
-  //     try renderToken(r, field.ast.main_token + 1, .space); // =
-  //     return renderExpressionComma(r, field.ast.value_expr, space); // value
-  // }
   if (field.ast.type_expr === 0 && field.ast.value_expr !== 0) {
     el.push(<TokenDisplay token={field.ast.main_token} />);
     if (field.ast.align_expr !== 0) {
@@ -2637,26 +1185,11 @@ const ContainerFieldBody = ({
     renderExpressionComma(el, ast, field.ast.value_expr);
     return el;
   }
-  // if (!field.ast.tuple_like) {
-  //     try renderIdentifier(r, field.ast.main_token, .none, quote); // name
-  //     try renderToken(r, field.ast.main_token + 1, .space); // :
-  // }
-  // try renderExpression(r, field.ast.type_expr, .space); // type
   if (!field.ast.tuple_like) {
     el.push(<TokenDisplay token={field.ast.main_token} />);
     el.push(<TokenDisplay token={field.ast.main_token + 1} />);
   }
   el.push(<Expression node={field.ast.type_expr} />);
-  //
-  // if (field.ast.align_expr != 0) {
-  //     const lparen_token = tree.firstToken(field.ast.align_expr) - 1;
-  //     const align_kw = lparen_token - 1;
-  //     const rparen_token = tree.lastToken(field.ast.align_expr) + 1;
-  //     try renderToken(r, align_kw, .none); // align
-  //     try renderToken(r, lparen_token, .none); // (
-  //     try renderExpression(r, field.ast.align_expr, .none); // alignment
-  //     try renderToken(r, rparen_token, .space); // )
-  // }
   if (field.ast.align_expr !== 0) {
     const lparen = getFirstToken(ast, field.ast.align_expr) - 1;
     const alignKw = lparen - 1;
@@ -2666,34 +1199,10 @@ const ContainerFieldBody = ({
     el.push(<Expression node={field.ast.align_expr} />);
     el.push(<TokenDisplay token={rparen} />);
   }
-  // const eq_token = tree.firstToken(field.ast.value_expr) - 1;
   const eqToken = getFirstToken(ast, field.ast.value_expr) - 1;
-  // const eq_space: Space = if (tree.tokensOnSameLine(eq_token, eq_token + 1)) .space else .newline;
-  // {
-  //     ais.pushIndent();
-  //     try renderToken(r, eq_token, eq_space); // =
-  //     ais.popIndent();
-  // }
   el.push(<TokenDisplay token={eqToken} />);
-  // if (eq_space == .space)
-  //     return renderExpressionComma(r, field.ast.value_expr, space); // value
-  // el.push(<Expression node={field.ast.value_expr} />);
   renderExpressionComma(el, ast, field.ast.value_expr);
   return el;
-  // const token_tags = tree.tokens.items(.tag);
-  // const maybe_comma = tree.lastToken(field.ast.value_expr) + 1;
-  //
-  // if (token_tags[maybe_comma] == .comma) {
-  //     ais.pushIndent();
-  //     try renderExpression(r, field.ast.value_expr, .none); // value
-  //     ais.popIndent();
-  //     try renderToken(r, maybe_comma, .newline);
-  // } else {
-  //     ais.pushIndent();
-  //     try renderExpression(r, field.ast.value_expr, space); // value
-  //     ais.popIndent();
-  // }
-  // throw new Error("ContainerFieldBody not implemented");
 };
 
 const ContainerField = ({
@@ -2703,7 +1212,10 @@ const ContainerField = ({
   const { ast } = useAst();
   return (
     <NodeDisplay node={node}>
-      <ErrorBoundary fallbackRender={({ error }) => <pre>{error.message}</pre>}>
+      <ErrorBoundary
+        resetKeys={[ast, node]}
+        fallbackRender={({ error }) => <pre>{error.message}</pre>}
+      >
         <ContainerFieldBody node={node} container={container} />
       </ErrorBoundary>
     </NodeDisplay>
@@ -2713,59 +1225,15 @@ const ExpressionBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const mainToken = getMainToken(ast, node);
   const data = getNodeData(ast, node);
-  //       const tree = r.tree;
-  //     const ais = r.ais;
-  //     const token_tags = tree.tokens.items(.tag);
-  //     const main_tokens = tree.nodes.items(.main_token);
-  //     const node_tags = tree.nodes.items(.tag);
-  //     const datas = tree.nodes.items(.data);
-  //     if (r.fixups.replace_nodes_with_string.get(node)) |replacement| {
-  //         try ais.writer().writeAll(replacement);
-  //         try renderOnlySpace(r, space);
-  //         return;
-  //     } else if (r.fixups.replace_nodes_with_node.get(node)) |replacement| {
-  //         return renderExpression(r, replacement, space);
-  //     }
   switch (getNodeTag(ast, node)) {
-    //     switch (node_tags[node]) {
-    //         .identifier => {
-    //             const token_index = main_tokens[node];
-    //             return renderIdentifier(r, token_index, space, .preserve_when_shadowing);
-    //         },
     case AstNodeTag.Identifier:
       return <TokenDisplay token={mainToken} />;
-    //
-    //         .number_literal,
-    //         .char_literal,
-    //         .unreachable_literal,
-    //         .anyframe_literal,
-    //         .string_literal,
-    //         => return renderToken(r, main_tokens[node], space),
     case AstNodeTag.NumberLiteral:
     case AstNodeTag.CharLiteral:
     case AstNodeTag.UnreachableLiteral:
     case AstNodeTag.AnyframeLiteral:
     case AstNodeTag.StringLiteral:
       return <TokenDisplay token={mainToken} />;
-
-    //
-    //         .multiline_string_literal => {
-    //             var locked_indents = ais.lockOneShotIndent();
-    //             try ais.maybeInsertNewline();
-    //
-    //             var i = datas[node].lhs;
-    //             while (i <= datas[node].rhs) : (i += 1) try renderToken(r, i, .newline);
-    //
-    //             while (locked_indents > 0) : (locked_indents -= 1) ais.popIndent();
-    //
-    //             switch (space) {
-    //                 .none, .space, .newline, .skip => {},
-    //                 .semicolon => if (token_tags[i] == .semicolon) try renderToken(r, i, .newline),
-    //                 .comma => if (token_tags[i] == .comma) try renderToken(r, i, .newline),
-    //                 .comma_space => if (token_tags[i] == .comma) try renderToken(r, i, .space),
-    //             }
-    //         },
-
     case AstNodeTag.MultilineStringLiteral:
       return (
         <>
@@ -2774,11 +1242,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
           ))}
         </>
       );
-    //         .error_value => {
-    //             try renderToken(r, main_tokens[node], .none);
-    //             try renderToken(r, main_tokens[node] + 1, .none);
-    //             return renderIdentifier(r, main_tokens[node] + 2, space, .eagerly_unquote);
-    //         },
     case AstNodeTag.ErrorValue:
       return (
         <>
@@ -2787,45 +1250,11 @@ const ExpressionBody = ({ node }: NodeComponent) => {
           <TokenDisplay token={mainToken + 2} />
         </>
       );
-
-    //
-    //         .block_two,
-    //         .block_two_semicolon,
-    //         => {
-    //             const statements = [2]Ast.Node.Index{ datas[node].lhs, datas[node].rhs };
-    //             if (datas[node].lhs == 0) {
-    //                 return renderBlock(r, node, statements[0..0], space);
-    //             } else if (datas[node].rhs == 0) {
-    //                 return renderBlock(r, node, statements[0..1], space);
-    //             } else {
-    //                 return renderBlock(r, node, statements[0..2], space);
-    //             }
-    //         },
-    //         .block,
-    //         .block_semicolon,
-    //         => {
-    //             const statements = tree.extra_data[datas[node].lhs..datas[node].rhs];
-    //             return renderBlock(r, node, statements, space);
-    //         },
     case AstNodeTag.BlockTwo:
     case AstNodeTag.BlockTwoSemicolon:
     case AstNodeTag.Block:
     case AstNodeTag.BlockSemicolon:
       return <BlockBody node={node} />;
-
-    //         .@"errdefer" => {
-    //             const defer_token = main_tokens[node];
-    //             const payload_token = datas[node].lhs;
-    //             const expr = datas[node].rhs;
-    //
-    //             try renderToken(r, defer_token, .space);
-    //             if (payload_token != 0) {
-    //                 try renderToken(r, payload_token - 1, .none); // |
-    //                 try renderIdentifier(r, payload_token, .none, .preserve_when_shadowing); // identifier
-    //                 try renderToken(r, payload_token + 1, .space); // |
-    //             }
-    //             return renderExpression(r, expr, space);
-    //         },
     case AstNodeTag.Errdefer: {
       const deferToken = mainToken;
       const payloadToken = data.lhs;
@@ -2844,14 +1273,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-
-    //
-    //         .@"defer" => {
-    //             const defer_token = main_tokens[node];
-    //             const expr = datas[node].rhs;
-    //             try renderToken(r, defer_token, .space);
-    //             return renderExpression(r, expr, space);
-    //         },
     case AstNodeTag.Defer: {
       const deferToken = mainToken;
       const expr = data.rhs;
@@ -2862,12 +1283,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .@"comptime", .@"nosuspend" => {
-    //             const comptime_token = main_tokens[node];
-    //             const block = datas[node].lhs;
-    //             try renderToken(r, comptime_token, .space);
-    //             return renderExpression(r, block, space);
-    //         },
     case AstNodeTag.Comptime:
     case AstNodeTag.Nosuspend: {
       const comptimeToken = mainToken;
@@ -2879,12 +1294,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .@"suspend" => {
-    //             const suspend_token = main_tokens[node];
-    //             const body = datas[node].lhs;
-    //             try renderToken(r, suspend_token, .space);
-    //             return renderExpression(r, body, space);
-    //         },
     case AstNodeTag.Suspend: {
       const suspendToken = mainToken;
       const body = data.lhs;
@@ -2895,29 +1304,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //
-    //         .@"catch" => {
-    //             const main_token = main_tokens[node];
-    //             const fallback_first = tree.firstToken(datas[node].rhs);
-    //
-    //             const same_line = tree.tokensOnSameLine(main_token, fallback_first);
-    //             const after_op_space = if (same_line) Space.space else Space.newline;
-    //
-    //             try renderExpression(r, datas[node].lhs, .space); // target
-    //
-    //             if (token_tags[fallback_first - 1] == .pipe) {
-    //                 try renderToken(r, main_token, .space); // catch keyword
-    //                 try renderToken(r, main_token + 1, .none); // pipe
-    //                 try renderIdentifier(r, main_token + 2, .none, .preserve_when_shadowing); // payload identifier
-    //                 try renderToken(r, main_token + 3, after_op_space); // pipe
-    //             } else {
-    //                 assert(token_tags[fallback_first - 1] == .keyword_catch);
-    //                 try renderToken(r, main_token, after_op_space); // catch keyword
-    //             }
-    //
-    //             ais.pushIndentOneShot();
-    //             try renderExpression(r, datas[node].rhs, space); // fallback
-    //         },
     case AstNodeTag.Catch: {
       const fallbackFirst = getFirstToken(ast, data.rhs);
 
@@ -2941,34 +1327,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .field_access => {
-    //             const main_token = main_tokens[node];
-    //             const field_access = datas[node];
-    //
-    //             try renderExpression(r, field_access.lhs, .none);
-    //
-    //             // Allow a line break between the lhs and the dot if the lhs and rhs
-    //             // are on different lines.
-    //             const lhs_last_token = tree.lastToken(field_access.lhs);
-    //             const same_line = tree.tokensOnSameLine(lhs_last_token, main_token + 1);
-    //             if (!same_line) {
-    //                 if (!hasComment(tree, lhs_last_token, main_token)) try ais.insertNewline();
-    //                 ais.pushIndentOneShot();
-    //             }
-    //
-    //             try renderToken(r, main_token, .none); // .
-    //
-    //             // This check ensures that zag() is indented in the following example:
-    //             // const x = foo
-    //             //     .bar()
-    //             //     . // comment
-    //             //     zag();
-    //             if (!same_line and hasComment(tree, main_token, main_token + 1)) {
-    //                 ais.pushIndentOneShot();
-    //             }
-    //
-    //             return renderIdentifier(r, field_access.rhs, space, .eagerly_unquote); // field
-    //         },
     case AstNodeTag.FieldAccess: {
       const fieldAccess = data;
       return (
@@ -2979,14 +1337,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .error_union,
-    //         .switch_range,
-    //         => {
-    //             const infix = datas[node];
-    //             try renderExpression(r, infix.lhs, .none);
-    //             try renderToken(r, main_tokens[node], .none);
-    //             return renderExpression(r, infix.rhs, space);
-    //         },
     case AstNodeTag.ErrorUnion:
     case AstNodeTag.SwitchRange: {
       const infix = data;
@@ -2998,16 +1348,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .for_range => {
-    //             const infix = datas[node];
-    //             try renderExpression(r, infix.lhs, .none);
-    //             if (infix.rhs != 0) {
-    //                 try renderToken(r, main_tokens[node], .none);
-    //                 return renderExpression(r, infix.rhs, space);
-    //             } else {
-    //                 return renderToken(r, main_tokens[node], space);
-    //             }
-    //         },
     case AstNodeTag.ForRange: {
       const infix = data;
       return (
@@ -3024,68 +1364,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-
-    //         .add,
-    //         .add_wrap,
-    //         .add_sat,
-    //         .array_cat,
-    //         .array_mult,
-    //         .assign,
-    //         .assign_bit_and,
-    //         .assign_bit_or,
-    //         .assign_shl,
-    //         .assign_shl_sat,
-    //         .assign_shr,
-    //         .assign_bit_xor,
-    //         .assign_div,
-    //         .assign_sub,
-    //         .assign_sub_wrap,
-    //         .assign_sub_sat,
-    //         .assign_mod,
-    //         .assign_add,
-    //         .assign_add_wrap,
-    //         .assign_add_sat,
-    //         .assign_mul,
-    //         .assign_mul_wrap,
-    //         .assign_mul_sat,
-    //         .bang_equal,
-    //         .bit_and,
-    //         .bit_or,
-    //         .shl,
-    //         .shl_sat,
-    //         .shr,
-    //         .bit_xor,
-    //         .bool_and,
-    //         .bool_or,
-    //         .div,
-    //         .equal_equal,
-    //         .greater_or_equal,
-    //         .greater_than,
-    //         .less_or_equal,
-    //         .less_than,
-    //         .merge_error_sets,
-    //         .mod,
-    //         .mul,
-    //         .mul_wrap,
-    //         .mul_sat,
-    //         .sub,
-    //         .sub_wrap,
-    //         .sub_sat,
-    //         .@"orelse",
-    //         => {
-    //             const infix = datas[node];
-    //             try renderExpression(r, infix.lhs, .space);
-    //             const op_token = main_tokens[node];
-    //             if (tree.tokensOnSameLine(op_token, op_token + 1)) {
-    //                 try renderToken(r, op_token, .space);
-    //             } else {
-    //                 ais.pushIndent();
-    //                 try renderToken(r, op_token, .newline);
-    //                 ais.popIndent();
-    //             }
-    //             ais.pushIndentOneShot();
-    //             return renderExpression(r, infix.rhs, space);
-    //         },
     case AstNodeTag.Add:
     case AstNodeTag.AddWrap:
     case AstNodeTag.AddSat:
@@ -3142,36 +1420,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-
-    //         .assign_destructure => {
-    //             const full = tree.assignDestructure(node);
-    //             if (full.comptime_token) |comptime_token| {
-    //                 try renderToken(r, comptime_token, .space);
-    //             }
-    //
-    //             for (full.ast.variables, 0..) |variable_node, i| {
-    //                 const variable_space: Space = if (i == full.ast.variables.len - 1) .space else .comma_space;
-    //                 switch (node_tags[variable_node]) {
-    //                     .global_var_decl,
-    //                     .local_var_decl,
-    //                     .simple_var_decl,
-    //                     .aligned_var_decl,
-    //                     => {
-    //                         try renderVarDecl(r, tree.fullVarDecl(variable_node).?, true, variable_space);
-    //   },
-    //                     else => try renderExpression(r, variable_node, variable_space),
-    //                 }
-    //             }
-    //             if (tree.tokensOnSameLine(full.ast.equal_token, full.ast.equal_token + 1)) {
-    //                 try renderToken(r, full.ast.equal_token, .space);
-    //             } else {
-    //                 ais.pushIndent();
-    //                 try renderToken(r, full.ast.equal_token, .newline);
-    //                 ais.popIndent();
-    //             }
-    //             ais.pushIndentOneShot();
-    //             return renderExpression(r, full.ast.value_expr, space);
-    //         },
     case AstNodeTag.AssignDestructure: {
       const full = assignDestructure(ast, node);
       const el: JSX.Element[] = [];
@@ -3197,16 +1445,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
       el.push(<Expression node={full.ast.value_expr} />);
       return el;
     }
-    //         .bit_not,
-    //         .bool_not,
-    //         .negation,
-    //         .negation_wrap,
-    //         .optional_type,
-    //         .address_of,
-    //         => {
-    //             try renderToken(r, main_tokens[node], .none);
-    //             return renderExpression(r, datas[node].lhs, space);
-    //         },
     case AstNodeTag.BitNot:
     case AstNodeTag.BoolNot:
     case AstNodeTag.Negation:
@@ -3220,14 +1458,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //
-    //         .@"try",
-    //         .@"resume",
-    //         .@"await",
-    //         => {
-    //             try renderToken(r, main_tokens[node], .space);
-    //             return renderExpression(r, datas[node].lhs, space);
-    //         },
     case AstNodeTag.Try:
     case AstNodeTag.Resume:
     case AstNodeTag.Await: {
@@ -3238,38 +1468,16 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-
-    //         .array_type,
-    //         .array_type_sentinel,
-    //         => return renderArrayType(r, tree.fullArrayType(node).?, space),
     case AstNodeTag.ArrayType:
     case AstNodeTag.ArrayTypeSentinel: {
       return <ArrayTypeBody node={node} />;
     }
-
-    //         .ptr_type_aligned,
-    //         .ptr_type_sentinel,
-    //         .ptr_type,
-    //         .ptr_type_bit_range,
-    //         => return renderPtrType(r, tree.fullPtrType(node).?, space),
     case AstNodeTag.PtrTypeAligned:
     case AstNodeTag.PtrTypeSentinel:
     case AstNodeTag.PtrType:
     case AstNodeTag.PtrTypeBitRange: {
       return <PtrTypeBody node={node} />;
     }
-    //         .array_init_one,
-    //         .array_init_one_comma,
-    //         .array_init_dot_two,
-    //         .array_init_dot_two_comma,
-    //         .array_init_dot,
-    //         .array_init_dot_comma,
-    //         .array_init,
-    //         .array_init_comma,
-    //         => {
-    //             var elements: [2]Ast.Node.Index = undefined;
-    //             return renderArrayInit(r, tree.fullArrayInit(&elements, node).?, space);
-    //         },
     case AstNodeTag.ArrayInitOne:
     case AstNodeTag.ArrayInitOneComma:
     case AstNodeTag.ArrayInitDotTwo:
@@ -3281,18 +1489,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
       return <ArrayInitBody node={node} />;
     }
 
-    //         .struct_init_one,
-    //         .struct_init_one_comma,
-    //         .struct_init_dot_two,
-    //         .struct_init_dot_two_comma,
-    //         .struct_init_dot,
-    //         .struct_init_dot_comma,
-    //         .struct_init,
-    //         .struct_init_comma,
-    //         => {
-    //             var buf: [2]Ast.Node.Index = undefined;
-    //             return renderStructInit(r, node, tree.fullStructInit(&buf, node).?, space);
-    //         },
     case AstNodeTag.StructInitOne:
     case AstNodeTag.StructInitOneComma:
     case AstNodeTag.StructInitDotTwo:
@@ -3303,19 +1499,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
     case AstNodeTag.StructInitComma: {
       return <StructInitBody node={node} />;
     }
-
-    //         .call_one,
-    //         .call_one_comma,
-    //         .async_call_one,
-    //         .async_call_one_comma,
-    //         .call,
-    //         .call_comma,
-    //         .async_call,
-    //         .async_call_comma,
-    //         => {
-    //             var buf: [1]Ast.Node.Index = undefined;
-    //             return renderCall(r, tree.fullCall(&buf, node).?, space);
-    //         },
     case AstNodeTag.CallOne:
     case AstNodeTag.CallOneComma:
     case AstNodeTag.AsyncCallOne:
@@ -3326,26 +1509,10 @@ const ExpressionBody = ({ node }: NodeComponent) => {
     case AstNodeTag.AsyncCallComma: {
       return <CallBody node={node} />;
     }
-
-    //         .array_access => {
-    //             const suffix = datas[node];
-    //             const lbracket = tree.firstToken(suffix.rhs) - 1;
-    //             const rbracket = tree.lastToken(suffix.rhs) + 1;
-    //             const one_line = tree.tokensOnSameLine(lbracket, rbracket);
-    //             const inner_space = if (one_line) Space.none else Space.newline;
-    //             try renderExpression(r, suffix.lhs, .none);
-    //             ais.pushIndentNextLine();
-    //             try renderToken(r, lbracket, inner_space); // [
-    //             try renderExpression(r, suffix.rhs, inner_space);
-    //             ais.popIndent();
-    //             return renderToken(r, rbracket, space); // ]
-    //         },
     case AstNodeTag.ArrayAccess: {
       const suffix = data;
       const lbracket = getFirstToken(ast, suffix.rhs) - 1;
       const rbracket = getLastToken(ast, suffix.rhs) + 1;
-      // const oneLine = tokensOnSameLine(ast, lbracket, rbracket);
-      // const innerSpace = oneLine ? Space.None : Space.Newline;
       return (
         <>
           <Expression node={suffix.lhs} />
@@ -3355,18 +1522,11 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //
-    //         .slice_open, .slice, .slice_sentinel => return renderSlice(r, node, tree.fullSlice(node).?, space),
     case AstNodeTag.SliceOpen:
     case AstNodeTag.Slice:
     case AstNodeTag.SliceSentinel: {
       return <SliceBody node={node} />;
     }
-    //
-    //         .deref => {
-    //             try renderExpression(r, datas[node].lhs, .none);
-    //             return renderToken(r, main_tokens[node], space);
-    //         },
     case AstNodeTag.Deref: {
       return (
         <>
@@ -3375,11 +1535,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .unwrap_optional => {
-    //             try renderExpression(r, datas[node].lhs, .none);
-    //             try renderToken(r, main_tokens[node], .none);
-    //             return renderToken(r, datas[node].rhs, space);
-    //         },
     case AstNodeTag.UnwrapOptional: {
       return (
         <>
@@ -3389,26 +1544,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .@"break" => {
-    //             const main_token = main_tokens[node];
-    //             const label_token = datas[node].lhs;
-    //             const target = datas[node].rhs;
-    //             if (label_token == 0 and target == 0) {
-    //                 try renderToken(r, main_token, space); // break keyword
-    //             } else if (label_token == 0 and target != 0) {
-    //                 try renderToken(r, main_token, .space); // break keyword
-    //                 try renderExpression(r, target, space);
-    //             } else if (label_token != 0 and target == 0) {
-    //                 try renderToken(r, main_token, .space); // break keyword
-    //                 try renderToken(r, label_token - 1, .none); // colon
-    //                 try renderIdentifier(r, label_token, space, .eagerly_unquote); // identifier
-    //             } else if (label_token != 0 and target != 0) {
-    //                 try renderToken(r, main_token, .space); // break keyword
-    //                 try renderToken(r, label_token - 1, .none); // colon
-    //                 try renderIdentifier(r, label_token, .space, .eagerly_unquote); // identifier
-    //                 try renderExpression(r, target, space);
-    //             }
-    //         },
     case AstNodeTag.Break: {
       const labelToken = data.lhs;
       const target = data.rhs;
@@ -3440,17 +1575,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         );
       }
     }
-    //         .@"continue" => {
-    //             const main_token = main_tokens[node];
-    //             const label = datas[node].lhs;
-    //             if (label != 0) {
-    //                 try renderToken(r, main_token, .space); // continue
-    //                 try renderToken(r, label - 1, .none); // :
-    //                 return renderIdentifier(r, label, space, .eagerly_unquote); // label
-    //             } else {
-    //                 return renderToken(r, main_token, space); // continue
-    //             }
-    //         },
     case AstNodeTag.Continue: {
       const label = data.lhs;
       if (label !== 0) {
@@ -3465,14 +1589,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         return <TokenDisplay token={mainToken} />;
       }
     }
-    //         .@"return" => {
-    //             if (datas[node].lhs != 0) {
-    //                 try renderToken(r, main_tokens[node], .space);
-    //                 try renderExpression(r, datas[node].lhs, space);
-    //             } else {
-    //                 try renderToken(r, main_tokens[node], space);
-    //             }
-    //         },
     case AstNodeTag.Return: {
       if (data.lhs !== 0) {
         return (
@@ -3485,12 +1601,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         return <TokenDisplay token={mainToken} />;
       }
     }
-    //         .grouped_expression => {
-    //             try renderToken(r, main_tokens[node], .none); // lparen
-    //             ais.pushIndentOneShot();
-    //             try renderExpression(r, datas[node].lhs, .none);
-    //             return renderToken(r, datas[node].rhs, space); // rparen
-    //         },
     case AstNodeTag.GroupedExpression: {
       return (
         <>
@@ -3500,22 +1610,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         </>
       );
     }
-    //         .container_decl,
-    //         .container_decl_trailing,
-    //         .container_decl_arg,
-    //         .container_decl_arg_trailing,
-    //         .container_decl_two,
-    //         .container_decl_two_trailing,
-    //         .tagged_union,
-    //         .tagged_union_trailing,
-    //         .tagged_union_enum_tag,
-    //         .tagged_union_enum_tag_trailing,
-    //         .tagged_union_two,
-    //         .tagged_union_two_trailing,
-    //         => {
-    //             var buf: [2]Ast.Node.Index = undefined;
-    //             return renderContainerDecl(r, node, tree.fullContainerDecl(&buf, node).?, space);
-    //         },
     case AstNodeTag.ContainerDecl:
     case AstNodeTag.ContainerDeclTrailing:
     case AstNodeTag.ContainerDeclArg:
@@ -3530,54 +1624,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
     case AstNodeTag.TaggedUnionTwoTrailing: {
       return <ContainerDeclBody node={node} />;
     }
-    //         .error_set_decl => {
-    //             const error_token = main_tokens[node];
-    //             const lbrace = error_token + 1;
-    //             const rbrace = datas[node].rhs;
-    //
-    //             try renderToken(r, error_token, .none);
-    //
-    //             if (lbrace + 1 == rbrace) {
-    //                 // There is nothing between the braces so render condensed: `error{}`
-    //                 try renderToken(r, lbrace, .none);
-    //                 return renderToken(r, rbrace, space);
-    //             } else if (lbrace + 2 == rbrace and token_tags[lbrace + 1] == .identifier) {
-    //                 // There is exactly one member and no trailing comma or
-    //                 // comments, so render without surrounding spaces: `error{Foo}`
-    //                 try renderToken(r, lbrace, .none);
-    //                 try renderIdentifier(r, lbrace + 1, .none, .eagerly_unquote); // identifier
-    //                 return renderToken(r, rbrace, space);
-    //             } else if (token_tags[rbrace - 1] == .comma) {
-    //                 // There is a trailing comma so render each member on a new line.
-    //                 ais.pushIndentNextLine();
-    //                 try renderToken(r, lbrace, .newline);
-    //                 var i = lbrace + 1;
-    //                 while (i < rbrace) : (i += 1) {
-    //                     if (i > lbrace + 1) try renderExtraNewlineToken(r, i);
-    //                     switch (token_tags[i]) {
-    //                         .doc_comment => try renderToken(r, i, .newline),
-    //                         .identifier => try renderIdentifier(r, i, .comma, .eagerly_unquote),
-    //                         .comma => {},
-    //                         else => unreachable,
-    //                     }
-    //                 }
-    //                 ais.popIndent();
-    //                 return renderToken(r, rbrace, space);
-    //             } else {
-    //                 // There is no trailing comma so render everything on one line.
-    //                 try renderToken(r, lbrace, .space);
-    //                 var i = lbrace + 1;
-    //                 while (i < rbrace) : (i += 1) {
-    //                     switch (token_tags[i]) {
-    //                         .doc_comment => unreachable, // TODO
-    //                         .identifier => try renderIdentifier(r, i, .comma_space, .eagerly_unquote),
-    //                         .comma => {},
-    //                         else => unreachable,
-    //                     }
-    //                 }
-    //                 return renderToken(r, rbrace, space);
-    //             }
-    //         },
     case AstNodeTag.ErrorSetDecl: {
       const errorToken = mainToken;
       const lbrace = errorToken + 1;
@@ -3622,19 +1668,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         return el;
       }
     }
-    //         .builtin_call_two, .builtin_call_two_comma => {
-    //             if (datas[node].lhs == 0) {
-    //                 return renderBuiltinCall(r, main_tokens[node], &.{}, space);
-    //             } else if (datas[node].rhs == 0) {
-    //                 return renderBuiltinCall(r, main_tokens[node], &.{datas[node].lhs}, space);
-    //             } else {
-    //                 return renderBuiltinCall(r, main_tokens[node], &.{ datas[node].lhs, datas[node].rhs }, space);
-    //             }
-    //         },
-    //         .builtin_call, .builtin_call_comma => {
-    //             const params = tree.extra_data[datas[node].lhs..datas[node].rhs];
-    //             return renderBuiltinCall(r, main_tokens[node], params, space);
-    //         },
     case AstNodeTag.BuiltinCallTwo:
     case AstNodeTag.BuiltinCallTwoComma:
     case AstNodeTag.BuiltinCall:
@@ -3642,32 +1675,12 @@ const ExpressionBody = ({ node }: NodeComponent) => {
       return <BuiltinCallBody node={node} />;
     }
 
-    //
-    //         .fn_proto_simple,
-    //         .fn_proto_multi,
-    //         .fn_proto_one,
-    //         .fn_proto,
-    //         => {
-    //             var buf: [1]Ast.Node.Index = undefined;
-    //             return renderFnProto(r, tree.fullFnProto(&buf, node).?, space);
-    //         },
     case AstNodeTag.FnProtoSimple:
     case AstNodeTag.FnProtoMulti:
     case AstNodeTag.FnProtoOne:
     case AstNodeTag.FnProto: {
       return <FnProtoBody node={node} />;
     }
-
-    //         .anyframe_type => {
-    //             const main_token = main_tokens[node];
-    //             if (datas[node].rhs != 0) {
-    //                 try renderToken(r, main_token, .none); // anyframe
-    //                 try renderToken(r, main_token + 1, .none); // ->
-    //                 return renderExpression(r, datas[node].rhs, space);
-    //             } else {
-    //                 return renderToken(r, main_token, space); // anyframe
-    //             }
-    //         },
     case AstNodeTag.AnyframeType: {
       const rhs = data.rhs;
       if (rhs !== 0) {
@@ -3682,30 +1695,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
         return <TokenDisplay token={mainToken} />;
       }
     }
-    //         .@"switch",
-    //         .switch_comma,
-    //         => {
-    //             const switch_token = main_tokens[node];
-    //             const condition = datas[node].lhs;
-    //             const extra = tree.extraData(datas[node].rhs, Ast.Node.SubRange);
-    //             const cases = tree.extra_data[extra.start..extra.end];
-    //             const rparen = tree.lastToken(condition) + 1;
-    //
-    //             try renderToken(r, switch_token, .space); // switch keyword
-    //             try renderToken(r, switch_token + 1, .none); // lparen
-    //             try renderExpression(r, condition, .none); // condition expression
-    //             try renderToken(r, rparen, .space); // rparen
-    //
-    //             ais.pushIndentNextLine();
-    //             if (cases.len == 0) {
-    //                 try renderToken(r, rparen + 1, .none); // lbrace
-    //             } else {
-    //                 try renderToken(r, rparen + 1, .newline); // lbrace
-    //                 try renderExpressions(r, cases, .comma);
-    //             }
-    //             ais.popIndent();
-    //             return renderToken(r, tree.lastToken(node), space); // rbrace
-    //         },
     case AstNodeTag.Switch:
     case AstNodeTag.SwitchComma: {
       const switchToken = mainToken;
@@ -3729,55 +1718,32 @@ const ExpressionBody = ({ node }: NodeComponent) => {
 
       return el;
     }
-
-    //         .switch_case_one,
-    //         .switch_case_inline_one,
-    //         .switch_case,
-    //         .switch_case_inline,
-    //         => return renderSwitchCase(r, tree.fullSwitchCase(node).?, space),
     case AstNodeTag.SwitchCaseOne:
     case AstNodeTag.SwitchCaseInlineOne:
     case AstNodeTag.SwitchCase:
     case AstNodeTag.SwitchCaseInline: {
       return <SwitchCaseBody node={node} />;
     }
-    //         .while_simple,
-    //         .while_cont,
-    //         .@"while",
-    //         => return renderWhile(r, tree.fullWhile(node).?, space),
     case AstNodeTag.WhileSimple:
     case AstNodeTag.WhileCont:
     case AstNodeTag.While: {
       return <WhileBody node={node} />;
     }
 
-    //         .for_simple,
-    //         .@"for",
-    //         => return renderFor(r, tree.fullFor(node).?, space),
     case AstNodeTag.ForSimple:
     case AstNodeTag.For: {
       return <ForBody node={node} />;
     }
 
-    //         .if_simple,
-    //         .@"if",
-    //         => return renderIf(r, tree.fullIf(node).?, space),
     case AstNodeTag.IfSimple:
     case AstNodeTag.If: {
       return <IfBody node={node} />;
     }
 
-    //         .asm_simple,
-    //         .@"asm",
-    //         => return renderAsm(r, tree.fullAsm(node).?, space),
     case AstNodeTag.AsmSimple:
     case AstNodeTag.Asm: {
       return <AsmBody node={node} />;
     }
-    //         .enum_literal => {
-    //             try renderToken(r, main_tokens[node] - 1, .none); // .
-    //             return renderIdentifier(r, main_tokens[node], space, .eagerly_unquote); // name
-    //         },
     case AstNodeTag.EnumLiteral: {
       return (
         <>
@@ -3787,22 +1753,6 @@ const ExpressionBody = ({ node }: NodeComponent) => {
       );
     }
 
-    //         .fn_decl => unreachable,
-    //         .container_field => unreachable,
-    //         .container_field_init => unreachable,
-    //         .container_field_align => unreachable,
-    //         .root => unreachable,
-    //         .global_var_decl => unreachable,
-    //         .local_var_decl => unreachable,
-    //         .simple_var_decl => unreachable,
-    //         .aligned_var_decl => unreachable,
-    //         .@"usingnamespace" => unreachable,
-    //         .test_decl => unreachable,
-    //         .asm_output => unreachable,
-    //         .asm_input => unreachable,
-    //     }
-    // }
-    //
     case AstNodeTag.FnDecl:
     case AstNodeTag.ContainerField:
     case AstNodeTag.ContainerFieldInit:
@@ -3818,20 +1768,12 @@ const ExpressionBody = ({ node }: NodeComponent) => {
     case AstNodeTag.AsmInput:
       throw new Error("unreachable");
   }
-  throw new Error("unreachable");
 };
 const Expression = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   return (
     <NodeDisplay node={node}>
-      {/* <span>{getNodeSource(ast, node)}</span> */}
-      <ErrorBoundary
-        fallbackRender={({ error }) => (
-          <div className="bg-red-500/50">{error.message}</div>
-        )}
-      >
-        <ExpressionBody node={node} />
-      </ErrorBoundary>
+      <ExpressionBody node={node} />
     </NodeDisplay>
   );
 };
@@ -3844,138 +1786,29 @@ const MemberBody = ({
   const data = getNodeData(ast, node);
   const mainToken = getMainToken(ast, node);
   const decl = node;
-
-  //   fn renderMember(
-  //     r: *Render,
-  //     container: Container,
-  //     decl: Ast.Node.Index,
-  //     space: Space,
-  // ) Error!void {
-  //     const tree = r.tree;
-  //     const ais = r.ais;
-  //     const node_tags = tree.nodes.items(.tag);
-  //     const token_tags = tree.tokens.items(.tag);
-  //     const main_tokens = tree.nodes.items(.main_token);
-  //     const datas = tree.nodes.items(.data);
-  //     if (r.fixups.omit_nodes.contains(decl)) return;
-  //     try renderDocComments(r, tree.firstToken(decl));
-  //     switch (tree.nodes.items(.tag)[decl]) {
   switch (getNodeTag(ast, decl)) {
-    //         .fn_decl => {
-    //             // Some examples:
-    //             // pub extern "foo" fn ...
-    //             // export fn ...
-    //             const fn_proto = datas[decl].lhs;
-    //             const fn_token = main_tokens[fn_proto];
-    //             // Go back to the first token we should render here.
-    //             var i = fn_token;
-    //             while (i > 0) {
-    //                 i -= 1;
-    //                 switch (token_tags[i]) {
-    //                     .keyword_extern,
-    //                     .keyword_export,
-    //                     .keyword_pub,
-    //                     .string_literal,
-    //                     .keyword_inline,
-    //                     .keyword_noinline,
-    //                     => continue,
-    //
-    //                     else => {
-    //                         i += 1;
-    //                         break;
-    //                     },
-    //                 }
-    //             }
-    //             while (i < fn_token) : (i += 1) {
-    //                 try renderToken(r, i, .space);
-    //             }
-    //             switch (tree.nodes.items(.tag)[fn_proto]) {
-    //                 .fn_proto_one, .fn_proto => {
-    //                     const callconv_expr = if (tree.nodes.items(.tag)[fn_proto] == .fn_proto_one)
-    //                         tree.extraData(datas[fn_proto].lhs, Ast.Node.FnProtoOne).callconv_expr
-    //                     else
-    //                         tree.extraData(datas[fn_proto].lhs, Ast.Node.FnProto).callconv_expr;
-    //                     if (callconv_expr != 0 and tree.nodes.items(.tag)[callconv_expr] == .enum_literal) {
-    //                         if (mem.eql(u8, "Inline", tree.tokenSlice(main_tokens[callconv_expr]))) {
-    //                             try ais.writer().writeAll("inline ");
-    //                         }
-    //                     }
-    //                 },
-    //                 .fn_proto_simple, .fn_proto_multi => {},
-    //                 else => unreachable,
-    //             }
-    //             assert(datas[decl].rhs != 0);
-    //             try renderExpression(r, fn_proto, .space);
-    //             const body_node = datas[decl].rhs;
-    //             if (r.fixups.gut_functions.contains(decl)) {
-    //                 ais.pushIndent();
-    //                 const lbrace = tree.nodes.items(.main_token)[body_node];
-    //                 try renderToken(r, lbrace, .newline);
-    //                 try discardAllParams(r, fn_proto);
-    //                 try ais.writer().writeAll("@trap();");
-    //                 ais.popIndent();
-    //                 try ais.insertNewline();
-    //                 try renderToken(r, tree.lastToken(body_node), space); // rbrace
-    //             } else if (r.fixups.unused_var_decls.count() != 0) {
-    //                 ais.pushIndentNextLine();
-    //                 const lbrace = tree.nodes.items(.main_token)[body_node];
-    //                 try renderToken(r, lbrace, .newline);
-    //
-    //                 var fn_proto_buf: [1]Ast.Node.Index = undefined;
-    //                 const full_fn_proto = tree.fullFnProto(&fn_proto_buf, fn_proto).?;
-    //                 var it = full_fn_proto.iterate(&tree);
-    //                 while (it.next()) |param| {
-    //                     const name_ident = param.name_token.?;
-    //                     assert(token_tags[name_ident] == .identifier);
-    //                     if (r.fixups.unused_var_decls.contains(name_ident)) {
-    //                         const w = ais.writer();
-    //                         try w.writeAll("_ = ");
-    //                         try w.writeAll(tokenSliceForRender(r.tree, name_ident));
-    //                         try w.writeAll(";\n");
-    //                     }
-    //                 }
-    //                 var statements_buf: [2]Ast.Node.Index = undefined;
-    //                 const statements = switch (node_tags[body_node]) {
-    //                     .block_two,
-    //                     .block_two_semicolon,
-    //                     => b: {
-    //                         statements_buf = .{ datas[body_node].lhs, datas[body_node].rhs };
-    //                         if (datas[body_node].lhs == 0) {
-    //                             break :b statements_buf[0..0];
-    //                         } else if (datas[body_node].rhs == 0) {
-    //                             break :b statements_buf[0..1];
-    //                         } else {
-    //                             break :b statements_buf[0..2];
-    //                         }
-    //                     },
-    //                     .block,
-    //                     .block_semicolon,
-    //                     => tree.extra_data[datas[body_node].lhs..datas[body_node].rhs],
-    //
-    //                     else => unreachable,
-    //                 };
-    //                 return finishRenderBlock(r, body_node, statements, space);
-    //             } else {
-    //                 return renderExpression(r, body_node, space);
-    //             }
-    //         },
     case AstNodeTag.FnDecl: {
       const fnProto = data.lhs;
-      const fnToken = mainToken;
+      const fnToken = getMainToken(ast, fnProto);
       let i = fnToken;
-      while (i > 0) {
+      let b = 100;
+      while (i > 0 || b === 0) {
+        b--;
         i -= 1;
-        switch (getTokenTag(ast, i)) {
-          case TokenTag.KeywordExtern:
-          case TokenTag.KeywordExport:
-          case TokenTag.KeywordPub:
-          case TokenTag.StringLiteral:
-          case TokenTag.KeywordInline:
-          case TokenTag.KeywordNoinline:
-            continue;
-          default:
-            i += 1;
-            break;
+        if (
+          [
+            TokenTag.KeywordExtern,
+            TokenTag.KeywordExport,
+            TokenTag.KeywordPub,
+            TokenTag.StringLiteral,
+            TokenTag.KeywordInline,
+            TokenTag.KeywordNoinline,
+          ].includes(getTokenTag(ast, i))
+        ) {
+          continue;
+        } else {
+          i += 1;
+          break;
         }
       }
       const el: Array<JSX.Element> = [];
@@ -3983,20 +1816,13 @@ const MemberBody = ({
         el.push(<TokenDisplay token={i} />);
         i += 1;
       }
+
       switch (getNodeTag(ast, fnProto)) {
         case AstNodeTag.FnProtoOne:
         case AstNodeTag.FnProto: {
           const callconvExpr =
             getNodeExtraDataFnProtoOne(ast, fnProto).callconv_expr ??
             getNodeExtraDataFnProto(ast, fnProto).callconv_expr;
-          // if (callconvExpr !== 0) {
-          //   if (
-          //     getTokenSlice(ast, callconvExpr) === "Inline" &&
-          //     getTokenTag(ast, callconvExpr) === TokenTag.EnumLiteral
-          //   ) {
-          //     el.push(<span>inline </span>);
-          //   }
-          // }
         }
         case AstNodeTag.FnProtoSimple:
         case AstNodeTag.FnProtoMulti:
@@ -4011,39 +1837,6 @@ const MemberBody = ({
       el.push(<Expression node={bodyNode} />);
       return el;
     }
-
-    //         .fn_proto_simple,
-    //         .fn_proto_multi,
-    //         .fn_proto_one,
-    //         .fn_proto,
-    //         => {
-    //             // Extern function prototypes are parsed as these tags.
-    //             // Go back to the first token we should render here.
-    //             const fn_token = main_tokens[decl];
-    //             var i = fn_token;
-    //             while (i > 0) {
-    //                 i -= 1;
-    //                 switch (token_tags[i]) {
-    //                     .keyword_extern,
-    //                     .keyword_export,
-    //                     .keyword_pub,
-    //                     .string_literal,
-    //                     .keyword_inline,
-    //                     .keyword_noinline,
-    //                     => continue,
-    //
-    //                     else => {
-    //                         i += 1;
-    //                         break;
-    //                     },
-    //                 }
-    //             }
-    //             while (i < fn_token) : (i += 1) {
-    //                 try renderToken(r, i, .space);
-    //             }
-    //             try renderExpression(r, decl, .none);
-    //             return renderToken(r, tree.lastToken(decl) + 1, space); // semicolon
-    //         },
     case AstNodeTag.FnProtoSimple:
     case AstNodeTag.FnProtoMulti:
     case AstNodeTag.FnProtoOne:
@@ -4065,6 +1858,7 @@ const MemberBody = ({
             break;
         }
       }
+      console.log("fnToken", decl, fnToken, i);
       const el: Array<JSX.Element> = [];
       while (i < fnToken) {
         el.push(<TokenDisplay token={i} />);
@@ -4073,16 +1867,6 @@ const MemberBody = ({
       el.push(<Expression node={decl} />);
       return el;
     }
-    //         .@"usingnamespace" => {
-    //             const main_token = main_tokens[decl];
-    //             const expr = datas[decl].lhs;
-    //             if (main_token > 0 and token_tags[main_token - 1] == .keyword_pub) {
-    //                 try renderToken(r, main_token - 1, .space); // pub
-    //             }
-    //             try renderToken(r, main_token, .space); // usingnamespace
-    //             try renderExpression(r, expr, .none);
-    //             return renderToken(r, tree.lastToken(expr) + 1, space); // ;
-    //         },
     case AstNodeTag.Usingnamespace: {
       const expr = data.lhs;
       const el: Array<JSX.Element> = [];
@@ -4097,28 +1881,12 @@ const MemberBody = ({
       el.push(<TokenDisplay token={getLastToken(ast, expr) + 1} />);
       return el;
     }
-    //         .global_var_decl,
-    //         .local_var_decl,
-    //         .simple_var_decl,
-    //         .aligned_var_decl,
-    //         => return renderVarDecl(r, tree.fullVarDecl(decl).?, false, .semicolon),
     case AstNodeTag.GlobalVarDecl:
     case AstNodeTag.LocalVarDecl:
     case AstNodeTag.SimpleVarDecl:
     case AstNodeTag.AlignedVarDecl: {
       return <VarDeclBody node={decl} />;
     }
-    //         .test_decl => {
-    //             const test_token = main_tokens[decl];
-    //             try renderToken(r, test_token, .space);
-    //             const test_name_tag = token_tags[test_token + 1];
-    //             switch (test_name_tag) {
-    //                 .string_literal => try renderToken(r, test_token + 1, .space),
-    //                 .identifier => try renderIdentifier(r, test_token + 1, .space, .preserve_when_shadowing),
-    //                 else => {},
-    //             }
-    //             try renderExpression(r, datas[decl].rhs, space);
-    //         },
 
     case AstNodeTag.TestDecl: {
       const testToken = mainToken;
@@ -4139,17 +1907,6 @@ const MemberBody = ({
       return el;
     }
 
-    //         .container_field_init,
-    //         .container_field_align,
-    //         .container_field,
-    //         => return renderContainerField(r, container, tree.fullContainerField(decl).?, space),
-    //
-    //         .@"comptime" => return renderExpression(r, decl, space),
-    //
-    //         .root => unreachable,
-    //         else => unreachable,
-    //     }
-    //
     case AstNodeTag.ContainerFieldInit:
     case AstNodeTag.ContainerFieldAlign:
     case AstNodeTag.ContainerField: {
@@ -4171,18 +1928,6 @@ const Member = ({
 }: NodeComponent<{ container: ContainerType }>) => {
   const { ast } = useAst();
 
-  //
-  // switch (getNodeTag(ast, node)) {
-  //   case AstNodeTag.FnDecl:
-  //     return <FnDecl key={node} node={node} />;
-  //   default:
-  //     return (
-  //       <NodeDisplay node={node}>
-  //         <span>{getNodeSource(ast, node)}</span>
-  //       </NodeDisplay>
-  //     );
-  // }
-
   return (
     <NodeDisplay node={node}>
       <ErrorBoundary
@@ -4198,64 +1943,23 @@ const Member = ({
 const VarDeclBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   const varDecl = fullVarDecl(ast, node);
-  const data = getNodeData(ast, node);
   const el: Array<JSX.Element> = [];
-  //   const tree = r.tree;
-  // const ais = r.ais;
-  //
-  // if (var_decl.visib_token) |visib_token| {
-  //     try renderToken(r, visib_token, Space.space); // pub
-  // }
   if (varDecl.visib_token) {
     el.push(<TokenDisplay token={varDecl.visib_token} />);
   }
-  // if (var_decl.extern_export_token) |extern_export_token| {
-  //     try renderToken(r, extern_export_token, Space.space); // extern
-  //
-  //     if (var_decl.lib_name) |lib_name| {
-  //         try renderToken(r, lib_name, Space.space); // "lib"
-  //     }
-  // }
   if (varDecl.extern_export_token) {
     el.push(<TokenDisplay token={varDecl.extern_export_token} />);
     if (varDecl.lib_name) {
       el.push(<TokenDisplay token={varDecl.lib_name} />);
     }
   }
-  // if (var_decl.threadlocal_token) |thread_local_token| {
-  //     try renderToken(r, thread_local_token, Space.space); // threadlocal
-  // }
   if (varDecl.threadlocal_token) {
     el.push(<TokenDisplay token={varDecl.threadlocal_token} />);
   }
-  //
-  // if (!ignore_comptime_token) {
-  //     if (var_decl.comptime_token) |comptime_token| {
-  //         try renderToken(r, comptime_token, Space.space); // comptime
-  //     }
-  // }
   if (varDecl.comptime_token) {
     el.push(<TokenDisplay token={varDecl.comptime_token} />);
   }
-  // try renderToken(r, var_decl.ast.mut_token, .space); // var
   el.push(<TokenDisplay token={varDecl.ast.mut_token} />);
-  // if (var_decl.ast.type_node != 0 or var_decl.ast.align_node != 0 or
-  //     var_decl.ast.addrspace_node != 0 or var_decl.ast.section_node != 0 or
-  //     var_decl.ast.init_node != 0)
-  // {
-  //     const name_space = if (var_decl.ast.type_node == 0 and
-  //         (var_decl.ast.align_node != 0 or
-  //         var_decl.ast.addrspace_node != 0 or
-  //         var_decl.ast.section_node != 0 or
-  //         var_decl.ast.init_node != 0))
-  //         Space.space
-  //     else
-  //         Space.none;
-  //
-  //     try renderIdentifier(r, var_decl.ast.mut_token + 1, name_space, .preserve_when_shadowing); // name
-  // } else {
-  //     return renderIdentifier(r, var_decl.ast.mut_token + 1, space, .preserve_when_shadowing); // name
-  // }
   if (
     varDecl.ast.type_node !== 0 ||
     varDecl.ast.align_node !== 0 ||
@@ -4268,35 +1972,10 @@ const VarDeclBody = ({ node }: NodeComponent) => {
     el.push(<TokenDisplay token={varDecl.ast.mut_token + 1} />);
     return el;
   }
-  // if (var_decl.ast.type_node != 0) {
-  //     try renderToken(r, var_decl.ast.mut_token + 2, Space.space); // :
-  //     if (var_decl.ast.align_node != 0 or var_decl.ast.addrspace_node != 0 or
-  //         var_decl.ast.section_node != 0 or var_decl.ast.init_node != 0)
-  //     {
-  //         try renderExpression(r, var_decl.ast.type_node, .space);
-  //     } else {
-  //         return renderExpression(r, var_decl.ast.type_node, space);
-  //     }
-  // }
   if (varDecl.ast.type_node !== 0) {
     el.push(<TokenDisplay token={varDecl.ast.mut_token + 2} />);
     el.push(<Expression node={varDecl.ast.type_node} />);
   }
-  // if (var_decl.ast.align_node != 0) {
-  //     const lparen = tree.firstToken(var_decl.ast.align_node) - 1;
-  //     const align_kw = lparen - 1;
-  //     const rparen = tree.lastToken(var_decl.ast.align_node) + 1;
-  //     try renderToken(r, align_kw, Space.none); // align
-  //     try renderToken(r, lparen, Space.none); // (
-  //     try renderExpression(r, var_decl.ast.align_node, Space.none);
-  //     if (var_decl.ast.addrspace_node != 0 or var_decl.ast.section_node != 0 or
-  //         var_decl.ast.init_node != 0)
-  //     {
-  //         try renderToken(r, rparen, .space); // )
-  //     } else {
-  //         return renderToken(r, rparen, space); // )
-  //     }
-  // }
   if (varDecl.ast.align_node !== 0) {
     const lparen = getFirstToken(ast, varDecl.ast.align_node) - 1;
     const alignKw = lparen - 1;
@@ -4315,20 +1994,6 @@ const VarDeclBody = ({ node }: NodeComponent) => {
       return el;
     }
   }
-  // if (var_decl.ast.addrspace_node != 0) {
-  //     const lparen = tree.firstToken(var_decl.ast.addrspace_node) - 1;
-  //     const addrspace_kw = lparen - 1;
-  //     const rparen = tree.lastToken(var_decl.ast.addrspace_node) + 1;
-  //     try renderToken(r, addrspace_kw, Space.none); // addrspace
-  //     try renderToken(r, lparen, Space.none); // (
-  //     try renderExpression(r, var_decl.ast.addrspace_node, Space.none);
-  //     if (var_decl.ast.section_node != 0 or var_decl.ast.init_node != 0) {
-  //         try renderToken(r, rparen, .space); // )
-  //     } else {
-  //         try renderToken(r, rparen, .none); // )
-  //         return renderToken(r, rparen + 1, Space.newline); // ;
-  //     }
-  // }
   if (varDecl.ast.addrspace_node !== 0) {
     const lparen = getFirstToken(ast, varDecl.ast.addrspace_node) - 1;
     const addrspaceKw = lparen - 1;
@@ -4344,19 +2009,6 @@ const VarDeclBody = ({ node }: NodeComponent) => {
       return el;
     }
   }
-  // if (var_decl.ast.section_node != 0) {
-  //     const lparen = tree.firstToken(var_decl.ast.section_node) - 1;
-  //     const section_kw = lparen - 1;
-  //     const rparen = tree.lastToken(var_decl.ast.section_node) + 1;
-  //     try renderToken(r, section_kw, Space.none); // linksection
-  //     try renderToken(r, lparen, Space.none); // (
-  //     try renderExpression(r, var_decl.ast.section_node, Space.none);
-  //     if (var_decl.ast.init_node != 0) {
-  //         try renderToken(r, rparen, .space); // )
-  //     } else {
-  //         return renderToken(r, rparen, space); // )
-  //     }
-  // }
   if (varDecl.ast.section_node !== 0) {
     const lparen = getFirstToken(ast, varDecl.ast.section_node) - 1;
     const sectionKw = lparen - 1;
@@ -4371,18 +2023,8 @@ const VarDeclBody = ({ node }: NodeComponent) => {
       return el;
     }
   }
-  // assert(var_decl.ast.init_node != 0);
-  //
-  // const eq_token = tree.firstToken(var_decl.ast.init_node) - 1;
-  // const eq_space: Space = if (tree.tokensOnSameLine(eq_token, eq_token + 1)) .space else .newline;
-  // {
-  //     ais.pushIndent();
-  //     try renderToken(r, eq_token, eq_space); // =
-  //     ais.popIndent();
   const eqToken = getFirstToken(ast, varDecl.ast.init_node) - 1;
   el.push(<TokenDisplay token={eqToken} />);
-  // ais.pushIndentOneShot();
-  // return renderExpression(r, var_decl.ast.init_node, space); // ;
   el.push(<Expression node={varDecl.ast.init_node} />);
   return el;
 };
@@ -4390,13 +2032,7 @@ const VarDecl = ({ node }: NodeComponent) => {
   const { ast } = useAst();
   return (
     <NodeDisplay node={node}>
-      <ErrorBoundary
-        fallbackRender={({ error }) => (
-          <div className="bg-red-500/50">{error.message}</div>
-        )}
-      >
-        <VarDeclBody node={node} />
-      </ErrorBoundary>
+      <VarDeclBody node={node} />
     </NodeDisplay>
   );
 };
@@ -4428,12 +2064,19 @@ const Members = ({ children, node }: NodeComponent) => {
 };
 
 const TokenDisplay = ({ token }: { token: number }) => {
-  const { ast, setActive, active } = useAst();
+  const { ast, setActive, setHovered, active, hovered } = useAst();
   const tag = getTokenTag(ast, token);
+  const isActive = isSameActiveEntity(active, { kind: "token", id: token });
   return (
     <div
-      className=" px-4 text-xs flex gap-2  py-1"
-      onClick={() => {
+      className={cn(
+        "px-4 text-xs flex gap-2  py-1 items-center hover:brightness-110 cursor-pointer text-zinc-400",
+        {
+          "bg-zinc-900/50 text-yellow-500": isActive,
+        },
+      )}
+      onClick={(e) => {
+        e.stopPropagation();
         if (active?.kind === "token" && active.id === token) {
           setActive(null);
           return;
@@ -4443,30 +2086,42 @@ const TokenDisplay = ({ token }: { token: number }) => {
           id: token,
         });
       }}
+      onMouseEnter={() => {
+        setHovered({
+          kind: "token",
+          id: token,
+        });
+      }}
+      onMouseLeave={() => {
+        setHovered((prev) => {
+          if (isSameActiveEntity(prev, { kind: "token", id: token })) {
+            return null;
+          }
+          return prev;
+        });
+      }}
     >
-      <span className="text-gray-400">
+      <span className="">
         .{TokenTagMap[tag]} "{tokenSlice(ast, token)}"
       </span>
-      <span className="text-xs opacity-50 border p-1 px-2 rounded-sm">
-        Tok #{token}
-      </span>
+      <Badge className="hover:text-yellow-500">Tok #{token}</Badge>
+    </div>
+  );
+};
+const Badge = ({ children, className, ...rest }: ComponentProps<"div">) => {
+  return (
+    <div
+      className={cn("bg-zinc-900  text-xs rounded-sm p-1 px-2", className)}
+      {...rest}
+    >
+      {children}
     </div>
   );
 };
 
 const FnProtoBody = ({ node }: NodeComponent) => {
   const { ast } = useAst();
-  const data = getNodeData(ast, node);
-  const mainToken = getMainToken(ast, node);
   const fnProto = fullFnProto(ast, node);
-
-  //   fn renderFnProto(r: *Render, fn_proto: Ast.full.FnProto, space: Space) Error!void {
-  //     const tree = r.tree;
-  //     const ais = r.ais;
-  //     const token_tags = tree.tokens.items(.tag);
-  //     const token_starts = tree.tokens.items(.start);
-  //
-  //     const after_fn_token = fn_proto.ast.fn_token + 1;
 
   const el: Array<JSX.Element> = [];
   const afterFnToken = fnProto.ast.fn_token + 1;
@@ -4481,103 +2136,7 @@ const FnProtoBody = ({ node }: NodeComponent) => {
   }
 
   el.push(<TokenDisplay token={lparen} />);
-  //     const lparen = if (token_tags[after_fn_token] == .identifier) blk: {
-  //         try renderToken(r, fn_proto.ast.fn_token, .space); // fn
-  //         try renderIdentifier(r, after_fn_token, .none, .preserve_when_shadowing); // name
-  //         break :blk after_fn_token + 1;
-  //     } else blk: {
-  //         try renderToken(r, fn_proto.ast.fn_token, .space); // fn
-  //         break :blk fn_proto.ast.fn_token + 1;
-  //     };
-  //     assert(token_tags[lparen] == .l_paren);
-  //
-  //     const maybe_bang = tree.firstToken(fn_proto.ast.return_type) - 1;
-
-  //     const rparen = blk: {
-  //         // These may appear in any order, so we have to check the token_starts array
-  //         // to find out which is first.
-  //         var rparen = if (token_tags[maybe_bang] == .bang) maybe_bang - 1 else maybe_bang;
-  //         var smallest_start = token_starts[maybe_bang];
-  //         if (fn_proto.ast.align_expr != 0) {
-  //             const tok = tree.firstToken(fn_proto.ast.align_expr) - 3;
-  //             const start = token_starts[tok];
-  //             if (start < smallest_start) {
-  //                 rparen = tok;
-  //                 smallest_start = start;
-  //             }
-  //         }
-  //         if (fn_proto.ast.addrspace_expr != 0) {
-  //             const tok = tree.firstToken(fn_proto.ast.addrspace_expr) - 3;
-  //             const start = token_starts[tok];
-  //             if (start < smallest_start) {
-  //                 rparen = tok;
-  //                 smallest_start = start;
-  //             }
-  //         }
-  //         if (fn_proto.ast.section_expr != 0) {
-  //             const tok = tree.firstToken(fn_proto.ast.section_expr) - 3;
-  //             const start = token_starts[tok];
-  //             if (start < smallest_start) {
-  //                 rparen = tok;
-  //                 smallest_start = start;
-  //             }
-  //         }
-  //         if (fn_proto.ast.callconv_expr != 0) {
-  //             const tok = tree.firstToken(fn_proto.ast.callconv_expr) - 3;
-  //             const start = token_starts[tok];
-  //             if (start < smallest_start) {
-  //                 rparen = tok;
-  //                 smallest_start = start;
-  //             }
-  //         }
-  //         break :blk rparen;
-  //     };
-  const maybeBang = getFirstToken(ast, fnProto.ast.return_type) - 1;
-
-  const rparen = useMemo(() => {
-    let rparen = maybeBang;
-    let smallestStart = getTokenStart(ast, maybeBang);
-    if (fnProto.ast.align_expr !== 0) {
-      const tok = getFirstToken(ast, fnProto.ast.align_expr) - 3;
-      const start = getTokenStart(ast, tok);
-      if (start < smallestStart) {
-        rparen = tok;
-        smallestStart = start;
-      }
-    }
-    if (fnProto.ast.addrspace_expr !== 0) {
-      const tok = getFirstToken(ast, fnProto.ast.addrspace_expr) - 3;
-      const start = getTokenStart(ast, tok);
-      if (start < smallestStart) {
-        rparen = tok;
-        smallestStart = start;
-      }
-    }
-    if (fnProto.ast.section_expr !== 0) {
-      const tok = getFirstToken(ast, fnProto.ast.section_expr) - 3;
-      const start = getTokenStart(ast, tok);
-      if (start < smallestStart) {
-        rparen = tok;
-        smallestStart = start;
-      }
-    }
-    if (fnProto.ast.callconv_expr !== 0) {
-      const tok = getFirstToken(ast, fnProto.ast.callconv_expr) - 3;
-      const start = getTokenStart(ast, tok);
-      if (start < smallestStart) {
-        rparen = tok;
-        smallestStart = start;
-      }
-    }
-    return rparen;
-  }, [ast, fnProto]);
-
-  //     assert(token_tags[rparen] == .r_paren);
-  //
-  //     // The params list is a sparse set that does *not* include anytype or ... parameters.
-  //
-  //     const trailing_comma = token_tags[rparen - 1] == .comma;
-  const trailingComma = getTokenTag(ast, rparen - 1) === TokenTag.Comma;
+  let maybeBang = getFirstToken(ast, fnProto.ast.return_type) - 1;
   let param_i = 0;
   let lastParamToken = lparen;
   while (true) {
@@ -4622,123 +2181,12 @@ const FnProtoBody = ({ node }: NodeComponent) => {
     lastParamToken = getLastToken(ast, param);
   }
 
-  //     if (!trailing_comma and !hasComment(tree, lparen, rparen)) {
-  //         // Render all on one line, no trailing comma.
-  //         try renderToken(r, lparen, .none); // (
-  //
-  //         var param_i: usize = 0;
-  //         var last_param_token = lparen;
-  //         while (true) {
-  //             last_param_token += 1;
-  //             switch (token_tags[last_param_token]) {
-  //                 .doc_comment => {
-  //                     try renderToken(r, last_param_token, .newline);
-  //                     continue;
-  //                 },
-  //                 .ellipsis3 => {
-  //                     try renderToken(r, last_param_token, .none); // ...
-  //                     break;
-  //                 },
-  //                 .keyword_noalias, .keyword_comptime => {
-  //                     try renderToken(r, last_param_token, .space);
-  //                     last_param_token += 1;
-  //                 },
-  //                 .identifier => {},
-  //                 .keyword_anytype => {
-  //                     try renderToken(r, last_param_token, .none); // anytype
-  //                     continue;
-  //                 },
-  //                 .r_paren => break,
-  //                 .comma => {
-  //                     try renderToken(r, last_param_token, .space); // ,
-  //                     continue;
-  //                 },
-  //                 else => {}, // Parameter type without a name.
-  //             }
-  //             if (token_tags[last_param_token] == .identifier and
-  //                 token_tags[last_param_token + 1] == .colon)
-  //             {
-  //                 try renderIdentifier(r, last_param_token, .none, .preserve_when_shadowing); // name
-  //                 last_param_token += 1;
-  //                 try renderToken(r, last_param_token, .space); // :
-  //                 last_param_token += 1;
-  //             }
-  //             if (token_tags[last_param_token] == .keyword_anytype) {
-  //                 try renderToken(r, last_param_token, .none); // anytype
-  //                 continue;
-  //             }
-  //             const param = fn_proto.ast.params[param_i];
-  //             param_i += 1;
-  //             try renderExpression(r, param, .none);
-  //             last_param_token = tree.lastToken(param);
-  //         }
-  //     } else {
-  //         // One param per line.
-  //         ais.pushIndent();
-  //         try renderToken(r, lparen, .newline); // (
-  //
-  //         var param_i: usize = 0;
-  //         var last_param_token = lparen;
-  //         while (true) {
-  //             last_param_token += 1;
-  //             switch (token_tags[last_param_token]) {
-  //                 .doc_comment => {
-  //                     try renderToken(r, last_param_token, .newline);
-  //                     continue;
-  //                 },
-  //                 .ellipsis3 => {
-  //                     try renderToken(r, last_param_token, .comma); // ...
-  //                     break;
-  //                 },
-  //                 .keyword_noalias, .keyword_comptime => {
-  //                     try renderToken(r, last_param_token, .space);
-  //                     last_param_token += 1;
-  //                 },
-  //                 .identifier => {},
-  //                 .keyword_anytype => {
-  //                     try renderToken(r, last_param_token, .comma); // anytype
-  //                     if (token_tags[last_param_token + 1] == .comma)
-  //                         last_param_token += 1;
-  //                     continue;
-  //                 },
-  //                 .r_paren => break,
-  //                 else => {}, // Parameter type without a name.
-  //             }
-  //             if (token_tags[last_param_token] == .identifier and
-  //                 token_tags[last_param_token + 1] == .colon)
-  //             {
-  //                 try renderIdentifier(r, last_param_token, .none, .preserve_when_shadowing); // name
-  //                 last_param_token += 1;
-  //                 try renderToken(r, last_param_token, .space); // :
-  //                 last_param_token += 1;
-  //             }
-  //             if (token_tags[last_param_token] == .keyword_anytype) {
-  //                 try renderToken(r, last_param_token, .comma); // anytype
-  //                 if (token_tags[last_param_token + 1] == .comma)
-  //                     last_param_token += 1;
-  //                 continue;
-  //             }
-  //             const param = fn_proto.ast.params[param_i];
-  //             param_i += 1;
-  //             try renderExpression(r, param, .comma);
-  //             last_param_token = tree.lastToken(param);
-  //             if (token_tags[last_param_token + 1] == .comma) last_param_token += 1;
-  //         }
-  //         ais.popIndent();
-  //     }
-  //
-  //     try renderToken(r, rparen, .space); // )
-  el.push(<TokenDisplay token={rparen} />);
-  //
-  //     if (fn_proto.ast.align_expr != 0) {
-  //         const align_lparen = tree.firstToken(fn_proto.ast.align_expr) - 1;
-  //         const align_rparen = tree.lastToken(fn_proto.ast.align_expr) + 1;
-  //
-  //         try renderToken(r, align_lparen - 1, .none); // align
-  //         try renderToken(r, align_lparen, .none); // (
-  //         try renderExpression(r, fn_proto.ast.align_expr, .none);
-  //         try renderToken(r, align_rparen, .space); // )
-  //     }
+  assert(
+    getTokenTag(ast, lastParamToken) === TokenTag.RParen,
+    "Expected RParen",
+  );
+  el.push(<TokenDisplay token={lastParamToken} />);
+
   if (fnProto.ast.align_expr !== 0) {
     const alignLparen = getFirstToken(ast, fnProto.ast.align_expr) - 1;
     const alignRparen = getLastToken(ast, fnProto.ast.align_expr) + 1;
@@ -4747,16 +2195,6 @@ const FnProtoBody = ({ node }: NodeComponent) => {
     el.push(<Expression node={fnProto.ast.align_expr} />);
     el.push(<TokenDisplay token={alignRparen} />);
   }
-
-  //     if (fn_proto.ast.addrspace_expr != 0) {
-  //         const align_lparen = tree.firstToken(fn_proto.ast.addrspace_expr) - 1;
-  //         const align_rparen = tree.lastToken(fn_proto.ast.addrspace_expr) + 1;
-  //
-  //         try renderToken(r, align_lparen - 1, .none); // addrspace
-  //         try renderToken(r, align_lparen, .none); // (
-  //         try renderExpression(r, fn_proto.ast.addrspace_expr, .none);
-  //         try renderToken(r, align_rparen, .space); // )
-  //     }
   if (fnProto.ast.addrspace_expr !== 0) {
     const addrspaceLparen = getFirstToken(ast, fnProto.ast.addrspace_expr) - 1;
     const addrspaceRparen = getLastToken(ast, fnProto.ast.addrspace_expr) + 1;
@@ -4765,15 +2203,6 @@ const FnProtoBody = ({ node }: NodeComponent) => {
     el.push(<Expression node={fnProto.ast.addrspace_expr} />);
     el.push(<TokenDisplay token={addrspaceRparen} />);
   }
-  //     if (fn_proto.ast.section_expr != 0) {
-  //         const section_lparen = tree.firstToken(fn_proto.ast.section_expr) - 1;
-  //         const section_rparen = tree.lastToken(fn_proto.ast.section_expr) + 1;
-  //
-  //         try renderToken(r, section_lparen - 1, .none); // section
-  //         try renderToken(r, section_lparen, .none); // (
-  //         try renderExpression(r, fn_proto.ast.section_expr, .none);
-  //         try renderToken(r, section_rparen, .space); // )
-  //     }
   if (fnProto.ast.section_expr !== 0) {
     const sectionLparen = getFirstToken(ast, fnProto.ast.section_expr) - 1;
     const sectionRparen = getLastToken(ast, fnProto.ast.section_expr) + 1;
@@ -4795,79 +2224,19 @@ const FnProtoBody = ({ node }: NodeComponent) => {
     el.push(<Expression node={fnProto.ast.callconv_expr} />);
     el.push(<TokenDisplay token={callconvRparen} />);
   }
-  //     const is_callconv_inline = mem.eql(u8, "Inline", tree.tokenSlice(tree.nodes.items(.main_token)[fn_proto.ast.callconv_expr]));
-  //     const is_declaration = fn_proto.name_token != null;
-  //     if (fn_proto.ast.callconv_expr != 0 and !(is_declaration and is_callconv_inline)) {
-  //         const callconv_lparen = tree.firstToken(fn_proto.ast.callconv_expr) - 1;
-  //         const callconv_rparen = tree.lastToken(fn_proto.ast.callconv_expr) + 1;
-  //
-  //         try renderToken(r, callconv_lparen - 1, .none); // callconv
-  //         try renderToken(r, callconv_lparen, .none); // (
-  //         try renderExpression(r, fn_proto.ast.callconv_expr, .none);
-  //         try renderToken(r, callconv_rparen, .space); // )
-  //     }
-  //
-  //     if (token_tags[maybe_bang] == .bang) {
-  //         try renderToken(r, maybe_bang, .none); // !
-  //     }
   if (getTokenTag(ast, maybeBang) === TokenTag.Bang) {
     el.push(<TokenDisplay token={maybeBang} />);
   }
-  //     return renderExpression(r, fn_proto.ast.return_type, space);
-  // }
-  el.push(<Expression node={fnProto.ast.return_type} />);
-  //
+  // bellow only happens with invalid syntax, when a fn proto has a return type
+  // ex `fn foo() {}`
+  // This is invalid in zig, but we display it anyway
+  if (fnProto.ast.return_type !== 0) {
+    el.push(<Expression node={fnProto.ast.return_type} />);
+  }
   return el;
 };
-const FnProto = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
 
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary
-        fallbackRender={({ error }) => (
-          <div className="bg-red-500/50">{error.message}</div>
-        )}
-      >
-        <FnProtoBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
-
-const NodeRef = ({ node }: NodeComponent) => {
-  const { ast } = useAst();
-  return (
-    <span
-      className="inline-block border p-1 rounded"
-      title={getNodeSource(ast, node)}
-    >
-      #Node {node} "{getNodeTagLabel(ast, node)}"
-    </span>
-  );
-};
 const BlockBody = ({ node }: NodeComponent) => {
-  //   const tree = r.tree;
-  // const ais = r.ais;
-  // const token_tags = tree.tokens.items(.tag);
-  // const lbrace = tree.nodes.items(.main_token)[block_node];
-  //
-  // if (token_tags[lbrace - 1] == .colon and
-  //     token_tags[lbrace - 2] == .identifier)
-  // {
-  //     try renderIdentifier(r, lbrace - 2, .none, .eagerly_unquote); // identifier
-  //     try renderToken(r, lbrace - 1, .space); // :
-  // }
-  // ais.pushIndentNextLine();
-  // if (statements.len == 0) {
-  //     try renderToken(r, lbrace, .none);
-  //     ais.popIndent();
-  //     try renderToken(r, tree.lastToken(block_node), space); // rbrace
-  //     return;
-  // }
-  // try renderToken(r, lbrace, .newline);
-  // return finishRenderBlock(r, block_node, statements, space);
-  //
   const { ast } = useAst();
 
   const nodeData = getNodeData(ast, node);
@@ -4890,8 +2259,6 @@ const BlockBody = ({ node }: NodeComponent) => {
   }, [ast, node]);
   const el: Array<JSX.Element> = [];
   const lbrace = getMainToken(ast, node);
-  el.push(<TokenDisplay token={lbrace} />);
-
   if (
     getTokenTag(ast, lbrace - 1) === TokenTag.Colon &&
     getTokenTag(ast, lbrace - 2) === TokenTag.Identifier
@@ -4905,32 +2272,12 @@ const BlockBody = ({ node }: NodeComponent) => {
     return el;
   }
 
-  // const tree = r.tree;
-  // const node_tags = tree.nodes.items(.tag);
-  // const ais = r.ais;
-  // for (statements, 0..) |stmt, i| {
-  //     if (i != 0) try renderExtraNewline(r, stmt);
-  //     if (r.fixups.omit_nodes.contains(stmt)) continue;
-  //     switch (node_tags[stmt]) {
-  //         .global_var_decl,
-  //         .local_var_decl,
-  //         .simple_var_decl,
-  //         .aligned_var_decl,
-  //         => try renderVarDecl(r, tree.fullVarDecl(stmt).?, false, .semicolon),
-  //
-  //         else => try renderExpression(r, stmt, .semicolon),
-  //     }
-  // }
-  // ais.popIndent();
-  //
-  // try renderToken(r, tree.lastToken(block_node), space); // rbrace
   for (const statement of statements) {
     switch (getNodeTag(ast, statement)) {
       case AstNodeTag.GlobalVarDecl:
       case AstNodeTag.LocalVarDecl:
       case AstNodeTag.SimpleVarDecl:
       case AstNodeTag.AlignedVarDecl: {
-        console.log("var decl", statement);
         el.push(<VarDecl node={statement} />);
         break;
       }
@@ -4946,65 +2293,13 @@ const BlockBody = ({ node }: NodeComponent) => {
   el.push(<TokenDisplay token={getLastToken(ast, node)} />);
   return el;
 };
-const Block = ({ node }: NodeComponent) => {
-  // const { ast } = useAst();
-  // const nodeData = getNodeData(ast, node);
-  // const statements: AstNodeIndex[] = useMemo(() => {
-  //   switch (getNodeTag(ast, node)) {
-  //     case AstNodeTag.BlockTwo:
-  //     case AstNodeTag.BlockTwoSemicolon: {
-  //       const statements = [];
-  //       if (nodeData.lhs > 0) statements.push(nodeData.lhs);
-  //       if (nodeData.rhs > 0) statements.push(nodeData.rhs);
-  //       return statements;
-  //     }
-  //     case AstNodeTag.Block:
-  //     case AstNodeTag.BlockSemicolon: {
-  //       return getExtraDataSpan(ast, nodeData.lhs, nodeData.rhs);
-  //     }
-  //     default:
-  //       throw new Error("Invalid block node");
-  //   }
-  // }, [ast, node]);
-  //
-  // console.log(nodeData, statements);
-  // return (
-  //   <NodeDisplay node={node}>
-  //     <span>{getNodeSource(ast, node)}</span>
-  //     statements:
-  //     {statements.map((statement) => {
-  //       switch (getNodeTag(ast, statement)) {
-  //         case AstNodeTag.GlobalVarDecl:
-  //         case AstNodeTag.LocalVarDecl:
-  //         case AstNodeTag.SimpleVarDecl:
-  //         case AstNodeTag.AlignedVarDecl: {
-  //           return <VarDecl node={statement} key={statement} />;
-  //         }
-  //         default:
-  //           return <Expression node={statement} key={statement} />;
-  //       }
-  //     })}
-  //   </NodeDisplay>
-  // );
-  //
-  return (
-    <NodeDisplay node={node}>
-      <ErrorBoundary
-        fallbackRender={({ error }) => (
-          <div className="bg-red-500/50">{error.message}</div>
-        )}
-      >
-        <BlockBody node={node} />
-      </ErrorBoundary>
-    </NodeDisplay>
-  );
-};
+
 export const Playground = () => {
   return (
     <div className="h-full overflow-y-hidden">
       <AstProvider>
-        <header className="sticky top-0 flex h-16 items-center gap-4 border-b bg-background px-4 md:px-6">
-          header
+        <header className="sticky top-0 flex h-16 items-center gap-2 border-b bg-background px-4 text-xs font-bold md:px-6">
+          <Image src="/zig-logo-light.svg" alt="Zig" width={40} height={20} />AST Viewer 
         </header>
         <ResizablePanelGroup direction="horizontal">
           <ResizablePanel>
@@ -5015,16 +2310,20 @@ export const Playground = () => {
           <ResizableHandle />
 
           <ResizablePanel>
-            <div className="flex flex-col text-sm h-full overflow-y-auto no-scrollbar">
-              <Members node={0} />
-            </div>
+            <Tree />
+            {/* <Members node={0} /> */}
           </ResizablePanel>
           <ResizableHandle />
 
+          {/* <ResizablePanel> */}
+          {/*   <div className="grid grid-cols-2 h-full text-xs overflow-y-auto"> */}
+          {/*     <FlatNodes /> */}
+          {/*     <FlatTokens /> */}
+          {/*   </div> */}
+          {/* </ResizablePanel> */}
+
           <ResizablePanel>
-            <div className="flex flex-col font-mono h-full text-sm overflow-y-auto">
-              <FlatNodes />
-            </div>
+            <SelectionDetails />
           </ResizablePanel>
         </ResizablePanelGroup>
       </AstProvider>
@@ -5070,8 +2369,482 @@ const FlatNodes = () => {
         >
           <span>{node}</span>
           <span>.{getNodeTagLabel(ast, node)}</span>
+          <span> {getMainToken(ast, node)}</span>
         </div>
       ))}
     </div>
+  );
+};
+
+const FlatTokens = () => {
+  const { ast, active, setActive, setHovered } = useAst();
+  const tokensLength = getTokensLength(ast);
+  const tagIds: number[] = [];
+  for (let i = 0; i < tokensLength; i++) {
+    tagIds.push(i);
+  }
+
+  return (
+    <div>
+      {tagIds.map((token) => (
+        <div
+          key={token}
+          className="border p-1"
+          title={tokenSlice(ast, token)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setActive((active) => {
+              if (isSameActiveEntity(active, { kind: "token", id: token }))
+                return null;
+
+              return { kind: "token", id: token };
+            });
+          }}
+          onMouseEnter={() => {
+            setHovered({ kind: "token", id: token });
+          }}
+          onMouseLeave={() => {
+            setHovered((hovered) => {
+              if (hovered?.id !== token || hovered?.kind !== "token")
+                return hovered;
+              return null;
+            });
+          }}
+        >
+          <span>{token}</span>
+          <span>.{TokenTagMap[getTokenTag(ast, token)]}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const TokenDetails = ({ token }: { token: number }) => {
+  const { ast } = useAst();
+  const tag = getTokenTag(ast, token);
+  const tokenStart = getFirstToken(ast, token);
+  const slice = tokenSlice(ast, token);
+  const tableRows: [React.ReactNode, React.ReactNode][] = [
+    [`Token`, `#${token}`],
+
+    [
+      `Tag`,
+      <pre>
+        <span className="text-zinc-400">Token</span>.
+        <span className="text-zinc-400">Tag</span>.
+        <span className="text-yellow-500">{`${TokenTagMap[tag]}`}</span>
+      </pre>,
+    ],
+    [`Start`, tokenStart],
+    [`End`, tokenStart + slice.length],
+    [`Source`, <pre className="text-yellow-400">`{slice}`</pre>],
+  ];
+  return (
+    <div className="p-4">
+      <header>
+        <h2 className="font-bold">Token Details</h2>
+      </header>
+      <Table>
+        <TableBody>
+          {tableRows.map(([col1, col2], i) => (
+            <TableRow key={i} className="text-xs">
+              <TableCell className="font-medium">{col1}</TableCell>
+              <TableCell className="text-right">{col2}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+};
+
+const NodeDetails = ({ node }: { node: number }) => {
+  const { ast } = useAst();
+  const tag = getNodeTag(ast, node);
+  const data = getNodeData(ast, node);
+  const mainToken = getMainToken(ast, node);
+  const firstToken = getFirstToken(ast, node);
+  const lastToken = getLastToken(ast, node);
+  const source = getNodeSource(ast, node);
+  const sourceLines = source.split("\n");
+  let sourceDisplay = "";
+  const full = useMemo(() => {
+    const tag = getNodeTag(ast, node);
+    switch (tag) {
+      case AstNodeTag.GlobalVarDecl:
+      case AstNodeTag.LocalVarDecl:
+      case AstNodeTag.SimpleVarDecl:
+      case AstNodeTag.AlignedVarDecl: {
+        return ["full.VarDecl", fullVarDecl(ast, node)] as const;
+      }
+      case AstNodeTag.IfSimple:
+      case AstNodeTag.If: {
+        return ["full.If", fullIf(ast, node)] as const;
+      }
+      case AstNodeTag.WhileSimple:
+      case AstNodeTag.WhileCont:
+      case AstNodeTag.While: {
+        return ["full.While", fullWhile(ast, node)] as const;
+      }
+      case AstNodeTag.ForSimple:
+      case AstNodeTag.For: {
+        return ["full.For", fullFor(ast, node)] as const;
+      }
+      case AstNodeTag.ContainerField:
+      case AstNodeTag.ContainerFieldInit:
+      case AstNodeTag.ContainerFieldAlign: {
+        return ["full.ContainerField", fullContainerField(ast, node)] as const;
+      }
+      case AstNodeTag.FnProto:
+      case AstNodeTag.FnProtoMulti:
+      case AstNodeTag.FnProtoOne:
+      case AstNodeTag.FnProtoSimple:
+      case AstNodeTag.FnDecl: {
+        return ["full.FnProto", fullFnProto(ast, node)] as const;
+      }
+      case AstNodeTag.StructInitComma:
+      case AstNodeTag.StructInitOne:
+      case AstNodeTag.StructInitDotTwo:
+      case AstNodeTag.StructInitDotTwoComma:
+      case AstNodeTag.StructInitDot:
+      case AstNodeTag.StructInitDotComma:
+      case AstNodeTag.StructInit:
+      case AstNodeTag.StructInitComma: {
+        return ["full.StructInit", fullStructInit(ast, node)] as const;
+      }
+      case AstNodeTag.ArrayInitOne:
+      case AstNodeTag.ArrayInitComma:
+      case AstNodeTag.ArrayInitDotTwo:
+      case AstNodeTag.ArrayInitDotTwoComma:
+      case AstNodeTag.ArrayInitDot:
+      case AstNodeTag.ArrayInitDotComma:
+      case AstNodeTag.ArrayInit:
+      case AstNodeTag.ArrayInitComma: {
+        return ["full.ArrayInit", fullArrayInit(ast, node)] as const;
+      }
+      case AstNodeTag.ArrayType:
+      case AstNodeTag.ArrayTypeSentinel: {
+        return ["full.ArrayType", fullArrayType(ast, node)] as const;
+      }
+      case AstNodeTag.PtrTypeAligned:
+      case AstNodeTag.PtrTypeSentinel:
+      case AstNodeTag.PtrType:
+      case AstNodeTag.PtrTypeBitRange: {
+        return ["full.PtrType", fullPtrType(ast, node)] as const;
+      }
+      case AstNodeTag.SliceOpen:
+      case AstNodeTag.Slice:
+      case AstNodeTag.SliceSentinel: {
+        return ["full.Slice", fullSlice(ast, node)] as const;
+      }
+      case AstNodeTag.Root:
+      case AstNodeTag.ContainerDecl:
+      case AstNodeTag.ContainerDeclTrailing:
+      case AstNodeTag.ContainerDeclArg:
+      case AstNodeTag.ContainerDeclArgTrailing:
+      case AstNodeTag.ContainerDeclTwo:
+      case AstNodeTag.ContainerDeclTwoTrailing:
+      case AstNodeTag.TaggedUnion:
+      case AstNodeTag.TaggedUnionTrailing:
+      case AstNodeTag.TaggedUnionEnumTag:
+      case AstNodeTag.TaggedUnionEnumTagTrailing:
+      case AstNodeTag.TaggedUnionTwo:
+      case AstNodeTag.TaggedUnionTwoTrailing: {
+        return ["full.ContainerDecl", fullContainerDecl(ast, node)] as const;
+      }
+      case AstNodeTag.SwitchCaseOne:
+      case AstNodeTag.SwitchCaseInlineOne:
+      case AstNodeTag.SwitchCase:
+      case AstNodeTag.SwitchCaseInline: {
+        return ["full.SwitchCase", fullSwitchCase(ast, node)] as const;
+      }
+
+      case AstNodeTag.AsmSimple:
+      case AstNodeTag.Asm: {
+        return ["full.Asm", fullAsm(ast, node)] as const;
+      }
+      case AstNodeTag.Call:
+      case AstNodeTag.CallComma:
+      case AstNodeTag.AsyncCall:
+      case AstNodeTag.AsyncCallComma:
+      case AstNodeTag.CallOne:
+      case AstNodeTag.CallOneComma:
+      case AstNodeTag.AsyncCallOne:
+      case AstNodeTag.AsyncCallOneComma: {
+        return ["full.Call", fullCall(ast, node)] as const;
+      }
+      default:
+        return null;
+    }
+  }, [ast, node]);
+  const compactSource = useMemo(() => {
+    const sourceLines = source.split("\n");
+    if (sourceLines[sourceLines.length - 1]?.trim() === "") {
+      sourceLines.pop();
+    }
+    const out: React.ReactNode[] = [];
+
+    for (let i = 0; i < Math.min(4, sourceLines.length); i++) {
+      // out.push(<span className="text-yellow-400 mr-2">{i + 1}</span>);
+      out.push(<span>{sourceLines[i]}</span>, <br />);
+    }
+
+    if (sourceLines.length < 4) return <pre className="text-left">{out}</pre>;
+    if (sourceLines.length > 6) out.push(<span>...</span>, <br />);
+
+    for (let i = sourceLines.length - 2; i < sourceLines.length; i++) {
+      // out.push(<span className="text-yellow-400 mr-2">{i + 1}</span>);
+      out.push(<span>{sourceLines[i]}</span>, <br />);
+    }
+
+    return <pre className="text-left">{out}</pre>;
+  }, [source]);
+
+  const tableRows: [React.ReactNode, React.ReactNode][] = [
+    [`Node`, `#${node}`],
+    [
+      `Tag`,
+      <pre>
+        <span className="text-zinc-400">Ast</span>.
+        <span className="text-zinc-400">Node</span>.
+        <span className="text-yellow-500">{`${AstNodeTagMap[tag]}`}</span>
+      </pre>,
+    ],
+    [`Main Token`, `#${mainToken}`],
+    [`First Token`, `#${firstToken}`],
+    [`Last Token`, `#${lastToken}`],
+  ];
+  const secondaryTableRows: [React.ReactNode, React.ReactNode][] = [
+    [`Source`, compactSource],
+    [`Data`, <pre className="text-left">{JSON.stringify(data, null, 2)}</pre>],
+  ];
+  if (full) {
+    secondaryTableRows.push([
+      full[0],
+      <pre className="text-left">{JSON.stringify(full[1], null, 2)}</pre>,
+    ]);
+  }
+
+  return (
+    <div className="p-4">
+      <header>
+        <h2 className="font-bold">Node Details</h2>
+      </header>
+      <Table>
+        <TableBody>
+          {tableRows.map(([col1, col2], i) => (
+            <TableRow key={i} className="text-xs">
+              <TableCell className="font-medium">{col1}</TableCell>
+              <TableCell className="text-right">{col2}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      {secondaryTableRows.map(([col1, col2], i) => (
+        <div key={i} className="p-2 text-xs text-zinc-400">
+          <h3 className="font-bold py-2 text-zinc-100">{col1}</h3>
+          {col2}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const SelectionDetails = () => {
+  let { ast, active, hovered } = useAst();
+  // active = { kind: "node", id: 0 };
+  if (!active)
+    return (
+      <div className="flex h-full items-center justify-center text-center">
+        <h2 className="text-zinc-300">Select a node or a token</h2>
+      </div>
+    );
+
+  if (active.kind === "token") {
+    return <TokenDetails token={active.id} />;
+  }
+  return <NodeDetails node={active.id} />;
+};
+
+const _Leaf = ({ nodeRef }: { nodeRef: NodeRef }) => {
+  const { ast, active, setActive, hovered, setHovered } = useAst();
+  const [collapsed, setCollapsed] = useState(false);
+  const node = nodeRef.index;
+  const tag = getNodeTag(ast, node);
+  const path = useMemo(() => {
+    let parent = nodeRef.parent;
+    const path: number[] = [];
+    while (parent) {
+      path.push(parent.index);
+      parent = parent.parent;
+    }
+    return path;
+  }, [ast, node]);
+  const children = useMemo(() => {
+    const children: (NodeRef | { kind: "tag"; index: number })[] = [];
+    let i = nodeRef.start;
+    for (const child of nodeRef.children) {
+      while (i < child.start) {
+        children.push({ kind: "tag", index: i });
+        i++;
+      }
+      children.push(child);
+      i = child.end;
+    }
+    while (i < nodeRef.end) {
+      children.push({ kind: "tag", index: i });
+      i++;
+    }
+    return children;
+  }, [ast, node]);
+  const isActive = isSameActiveEntity(active, { kind: "node", id: node });
+  const isHovered = isSameActiveEntity(hovered, { kind: "node", id: node });
+
+  return (
+    <section className="flex flex-col">
+      <header
+        className={cn("flex cursor-pointer ", {
+          "bg-zinc-900/50": isHovered,
+          "bg-zinc-900 text-yellow-500": isActive,
+        })}
+        onClick={(e) => {
+          e.stopPropagation();
+
+          setActive((active) => {
+            if (isSameActiveEntity(active, { kind: "node", id: node }))
+              return null;
+            return { kind: "node", id: node };
+          });
+        }}
+        onMouseEnter={() => {
+          setHovered({ kind: "node", id: node });
+        }}
+        onMouseLeave={() => {
+          setHovered((prev) => {
+            if (prev?.kind === "node" && prev.id === node) {
+              return null;
+            }
+            return prev;
+          });
+        }}
+      >
+        <IndentGuides indent={path.length} />
+        <h2 className="flex gap-1 items-center py-1">
+          {!!children.length && (
+            <button
+              onClick={(e) => setCollapsed((collapsed) => !collapsed)}
+              className="text-zinc-600 hover:text-zinc-400"
+            >
+              {!collapsed ? (
+                <CaretDownIcon className="w-4 h-4" />
+              ) : (
+                <CaretRightIcon className="w-4 h-4" />
+              )}
+            </button>
+          )}
+          {!children.length && (
+            <DotFilledIcon className="w-4 h-4 text-zinc-600" />
+          )}
+          <TypeBadge kind={"node"} index={node} />
+          <span>.{AstNodeTagMap[tag]}</span>
+        </h2>
+      </header>
+      {!collapsed && !!nodeRef.children.length && (
+        <main>
+          {children.map((child) => {
+            const key = `${child.kind}-${child.index}`;
+            if (child.kind === "node")
+              return <Leaf key={key} nodeRef={child} />;
+            return <Token key={key} token={child.index} path={path} />;
+            // return
+          })}
+        </main>
+      )}
+    </section>
+  );
+};
+const Leaf = (props: { nodeRef: NodeRef }) => {
+  const { ast } = useAst();
+  return (
+    <ErrorBoundary
+      fallbackRender={({ error }) => {
+        return <div className="text-red-500">Error: {error.message}</div>;
+      }}
+      resetKeys={[props.nodeRef.index, ast]}
+    >
+      <_Leaf {...props} />
+    </ErrorBoundary>
+  );
+};
+const IndentGuides = ({ indent }: { indent: number }) => {
+  return (
+    <div className="flex">
+      {new Array(indent).fill(0).map((_, i) => (
+        <span className="w-4 border-r block first:w-2" key={i} />
+      ))}
+    </div>
+  );
+};
+const TypeBadge = ({
+  kind,
+  index,
+}: {
+  kind: "token" | "node";
+  index: number;
+}) => {
+  return (
+    <span className="text-[0.8em] ">
+      {kind === "token" ? `T[` : "N["}
+      {index}
+      {"]"}
+    </span>
+  );
+};
+
+const Token = ({ token, path }: { token: number; path: number[] }) => {
+  const { ast, active, setActive, hovered, setHovered } = useAst();
+  const tag = getTokenTag(ast, token);
+  const isActive = isSameActiveEntity(active, { kind: "token", id: token });
+  const isHovered = isSameActiveEntity(hovered, { kind: "token", id: token });
+  return (
+    <div
+      className={cn("flex cursor-pointer  text-zinc-400", {
+        "bg-zinc-900/50": isHovered,
+        "bg-zinc-900 text-yellow-500": isActive,
+      })}
+      onClick={(e) => {
+        e.stopPropagation();
+        setActive((active) => {
+          if (isSameActiveEntity(active, { kind: "token", id: token }))
+            return null;
+          return { kind: "token", id: token };
+        });
+      }}
+      onMouseEnter={() => {
+        setHovered({ kind: "token", id: token });
+      }}
+      onMouseLeave={() => {
+        setHovered((prev) => {
+          if (prev?.kind === "token" && prev.id === token) {
+            return null;
+          }
+          return prev;
+        });
+      }}
+    >
+      <IndentGuides indent={path.length + 1} />
+      <h2 className="flex gap-1 items-center py-1 pl-1">
+        <TypeBadge kind={"token"} index={token} />.{TokenTagMap[tag]}
+      </h2>
+    </div>
+  );
+};
+const Tree = () => {
+  const { tree, ast } = useAst();
+
+  return (
+    <section className="flex flex-col gap-2 text-xs overflow-y-auto h-full no-scrollbar">
+      <Leaf nodeRef={tree} />
+    </section>
   );
 };

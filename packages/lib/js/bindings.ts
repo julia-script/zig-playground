@@ -12,21 +12,34 @@ import {
   TokenTag,
   type AstfullFnProto,
   type AstSpan,
-type  AstNodeArrayTypeSentinel,
-type AstNodeAsm,
-type AstNodeContainerField,
-type AstNodeFnProto,
-type AstNodeFnProtoOne,
-type AstNodeGlobalVarDecl,
-type AstNodeIf,
-type AstNodeLocalVarDecl,
-type AstNodePtrType,
-type AstNodePtrTypeBitRange,
-type AstNodeSlice,
-type AstNodeSliceSentinel,
-type AstNodeSubRange,
-type AstNodeWhile,
-type AstNodeWhileCont,
+  type AstNodeArrayTypeSentinel,
+  type AstNodeAsm,
+  type AstNodeContainerField,
+  type AstNodeFnProto,
+  type AstNodeFnProtoOne,
+  type AstNodeGlobalVarDecl,
+  type AstNodeIf,
+  type AstNodeLocalVarDecl,
+  type AstNodePtrType,
+  type AstNodePtrTypeBitRange,
+  type AstNodeSlice,
+  type AstNodeSliceSentinel,
+  type AstNodeSubRange,
+  type AstNodeWhile,
+  type AstNodeWhileCont,
+  type AstfullIf,
+  type AstfullAsm,
+  type AstfullWhile,
+  type AstfullFor,
+  type AstfullCall,
+  type AstfullVarDecl,
+  type AstfullStructInit,
+  type AstfullArrayInit,
+  type AstfullArrayType,
+  type AstfullPtrType,
+  type AstfullSlice,
+  type AstfullSwitchCase,
+  type AstfullAssignDestructure,
 } from "./bin/types";
 export * from "./bin/types";
 export { AstNodeTag } from "./bin/types";
@@ -172,11 +185,70 @@ export const getNodesLength = (ast: number) => {
 };
 
 export const getNodeTag = (ast: number, index: AstNodeIndex) => {
-  assertNode(ast, 0);
+  assertNode(ast, index);
   return exports.getNodeTag(ast, index) as AstNodeTag;
+};
+
+export const getTokenTag = (ast: number, index: AstTokenIndex) => {
+  assertToken(ast, index);
+  return exports.getTokenTag(ast, index) as TokenTag;
+};
+
+export const getTokenStart = (ast: number, index: AstTokenIndex) => {
+  assertToken(ast, index);
+  return exports.getTokenStart(ast, index);
 };
 export const getMainToken = (ast: number, index: AstNodeIndex) => {
   return exports.getMainToken(ast, index);
+};
+
+export const getFirstToken = (ast: number, index: AstNodeIndex) => {
+  return exports.getFirstToken(ast, index);
+};
+
+export const getLastToken = (ast: number, index: AstNodeIndex) => {
+  return exports.getLastToken(ast, index);
+};
+export const tokenLocation = (
+  ast: number,
+  byteOffset: number,
+  tokenIndex: AstTokenIndex,
+) => {
+  const pointer = exports.tokenLocation(ast, byteOffset, tokenIndex);
+  const buff = new Uint32Array(memory.buffer, pointer);
+  const data = {
+    line: buff[0],
+    column: buff[1],
+    line_start: buff[2],
+    line_end: buff[3],
+  };
+  exports.wasmFreeU32Z(pointer, 4);
+  return data;
+};
+
+export const getTokenRange = (ast: number, index: AstTokenIndex) => {
+  const pointer = exports.getTokenRange(ast, index);
+  const buff = new Uint32Array(memory.buffer, pointer);
+  const data = {
+    start_line: buff[0],
+    start_column: buff[1],
+    end_line: buff[2],
+    end_column: buff[3],
+  };
+  exports.wasmFreeU32Z(pointer, 4);
+  return data;
+};
+export const getNodeRange = (ast: number, index: AstNodeIndex) => {
+  const pointer = exports.getNodeRange(ast, index);
+  const buff = new Uint32Array(memory.buffer, pointer);
+  const data = {
+    start_line: buff[0],
+    start_column: buff[1],
+    end_line: buff[2],
+    end_column: buff[3],
+  };
+  exports.wasmFreeU32Z(pointer, 4);
+  return data;
 };
 
 export const getNodeData = (ast: number, index: AstNodeIndex) => {
@@ -188,6 +260,23 @@ export const getNodeData = (ast: number, index: AstNodeIndex) => {
   };
   exports.wasmFreeU32Z(pointer, 2);
   return data;
+};
+
+export const getExtraDataSpan = (
+  ast: number,
+  lhs: AstNodeIndex,
+  rhs: AstNodeIndex,
+) => {
+  const pointer = exports.getExtraDataSpan(ast, lhs, rhs);
+  const len = rhs - lhs;
+  const buff = new Uint32Array(memory.buffer, pointer);
+  const out = [...buff.slice(0, len)];
+  exports.wasmFreeU32Z(pointer, len);
+  return out;
+};
+
+export const getTokensLength = (ast: number) => {
+  return exports.getTokensLength(ast);
 };
 export const getNodeTagLabel = (ast: number, index: AstNodeIndex) => {
   return AstNodeTagMap[getNodeTag(ast, index)];
@@ -223,19 +312,6 @@ const assertToken = (ast: number, index: AstTokenIndex) => {
     );
   }
 };
-export const fullContainerDecl = (ast: number, index: AstNodeIndex) => {
-  assertNode(ast, index);
-  return decodeJson<AstfullContainerDecl>(
-    exports.fullContainerDecl(ast, index),
-  );
-};
-
-export const fullContainerField = (ast: number, index: AstNodeIndex) => {
-  assertNode(ast, index);
-  return decodeJson<AstfullContainerField>(
-    exports.fullContainerField(ast, index),
-  );
-};
 
 export const getNodeSource = (ast: number, index: AstNodeIndex) => {
   assertNode(ast, index);
@@ -253,18 +329,10 @@ export const nodeToSpan = (ast: number, index: AstNodeIndex): AstSpan => {
     main,
   };
 };
-export const fullVarDecl = (ast: number, index: AstNodeIndex) => {
-  assertNode(ast, index);
-  return decodeJson<AstfullContainerDecl>(exports.fullVarDecl(ast, index));
-};
+
 export const tokenSlice = (ast: number, index: AstTokenIndex) => {
   assertToken(ast, index);
   return decodeNullTerminatedString(memory, exports.tokenSlice(ast, index));
-};
-
-export const fullFnProto = (ast: number, index: AstNodeIndex) => {
-  assertNode(ast, index);
-  return decodeJson<AstfullFnProto>(exports.fullFnProto(ast, index));
 };
 
 export const tokenizeLine = (source: string) => {
@@ -379,4 +447,119 @@ export const getNodeExtraDataWhileCont = (ast: number, node: number) => {
   return decodeJson<AstNodeWhileCont>(
     exports.getNodeExtraDataWhileCont(ast, node),
   );
+};
+
+// full data
+export const fullContainerDecl = (ast: number, index: AstNodeIndex) => {
+  assertNode(ast, index);
+  return decodeJson<AstfullContainerDecl>(
+    exports.fullContainerDecl(ast, index),
+  );
+};
+
+export const fullIf = (ast: number, index: AstNodeIndex) => {
+  assertNode(ast, index);
+  return decodeJson<AstfullIf>(exports.fullIf(ast, index));
+};
+export const fullWhile = (ast: number, index: AstNodeIndex) => {
+  assertNode(ast, index);
+  return decodeJson<AstfullWhile>(exports.fullWhile(ast, index));
+};
+export const ifFull = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullIf>(exports.ifFull(ast, node));
+};
+export const asmFull = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullAsm>(exports.asmFull(ast, node));
+};
+export const whileFull = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullWhile>(exports.whileFull(ast, node));
+};
+export const forFull = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullFor>(exports.forFull(ast, node));
+};
+
+export const fullFor = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullFor>(exports.fullFor(ast, node));
+};
+export const callFull = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullCall>(exports.callFull(ast, node));
+};
+export const fullVarDecl = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullVarDecl>(exports.fullVarDecl(ast, node));
+};
+
+export const fullContainerField = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullContainerField>(
+    exports.fullContainerField(ast, node),
+  );
+};
+export const fullFnProto = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullFnProto>(exports.fullFnProto(ast, node));
+};
+export const fullStructInit = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullStructInit>(exports.fullStructInit(ast, node));
+};
+export const fullArrayInit = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullArrayInit>(exports.fullArrayInit(ast, node));
+};
+export const fullArrayType = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullArrayType>(exports.fullArrayType(ast, node));
+};
+export const fullPtrType = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullPtrType>(exports.fullPtrType(ast, node));
+};
+export const fullSlice = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullSlice>(exports.fullSlice(ast, node));
+};
+export const fullSwitchCase = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullSwitchCase>(exports.fullSwitchCase(ast, node));
+};
+export const fullAsm = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullAsm>(exports.fullAsm(ast, node));
+};
+export const fullCall = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullCall>(exports.fullCall(ast, node));
+};
+
+export const assignDestructure = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullAssignDestructure>(
+    exports.assignDestructure(ast, node),
+  );
+};
+export const globalVarDecl = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullVarDecl>(exports.globalVarDecl(ast, node));
+};
+
+export const localVarDecl = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullVarDecl>(exports.localVarDecl(ast, node));
+};
+
+export const simpleVarDecl = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullVarDecl>(exports.simpleVarDecl(ast, node));
+};
+
+export const alignedVarDecl = (ast: number, node: number) => {
+  assertNode(ast, node);
+  return decodeJson<AstfullVarDecl>(exports.alignedVarDecl(ast, node));
 };

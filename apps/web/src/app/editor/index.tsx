@@ -1,12 +1,25 @@
 import { initVimMode } from "monaco-vim";
 
-import { getNodeRange, tokenizeLine, render, getTokenRange } from "@zig-devkit/lib";
+import {
+  getNodeRange,
+  tokenizeLine,
+  render,
+  getTokenRange,
+} from "@zig-devkit/lib";
 import * as monaco from "monaco-editor";
-import { startTransition, useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import {
+  ComponentProps,
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { ActiveEntity, useAst } from "../AstProvider";
 import { useEffectEvent } from "../useEffectEvent";
 import { TokenToScopeMap } from "./TokenToScopeMap";
 import { theme } from "./theme";
+import { cn } from "@/lib/utils";
 
 class State {
   clone = () => new State();
@@ -85,7 +98,7 @@ export const Editor = () => {
       contextMenuGroupId: "navigation",
       contextMenuOrder: 1.5,
 
-      run: function() {
+      run: function () {
         save();
       },
     });
@@ -181,9 +194,47 @@ export const Editor = () => {
     };
   }, [hovered, active]);
   return (
-    <div className="flex flex-col h-full shadow-[-2px_0_0_0_theme(colors.yellow)]">
-      <div ref={ref} className="h-full grow shadow-[-2px_0_0_0]" />
+    <div className="flex flex-col h-full overflow-hidden">
+      <div ref={ref} className="grow" />
       <div ref={statusBarRef} className="h-4" />
     </div>
   );
+};
+
+export const EditorReadOnly = ({
+  source,
+  className,
+  ...rest
+}: ComponentProps<"div"> & { source: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    if (editorRef.current) return;
+
+    const editor = monaco.editor.create(ref.current, {
+      language: "zig",
+      // automaticLayout: true,
+      value: source,
+
+      minimap: { enabled: false },
+      wordWrap: "on",
+      lineNumbers: "off",
+      readOnly: true,
+      scrollBeyondLastLine: false,
+      tabSize: 4,
+      theme: "zig-theme",
+      fontSize: 16,
+    });
+
+    editorRef.current = editor;
+    console.log(editor);
+    return () => {
+      editor.dispose();
+      editorRef.current = null;
+    };
+  }, []);
+
+  return <div ref={ref} className={cn("h-36 w-full", className)} {...rest} />;
 };
