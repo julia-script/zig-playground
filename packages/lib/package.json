@@ -4,6 +4,7 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
+    "build": "bun build:js && bun build:tsc",
     "build:tsc": "tsc",
     "build:js": "bun build ./js/index.ts --outdir ./dist --sourcemap=linked",
     "build:zig": "zig build wasm -p js",
