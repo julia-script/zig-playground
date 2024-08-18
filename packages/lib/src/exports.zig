@@ -1,6 +1,9 @@
 const std = @import("std");
 const wasm = @import("wasm.zig");
 const Ast = std.zig.Ast;
+fn panic(message: []const u8, _: ?*std.builtin.StackTrace, _: ?usize) noreturn {
+    wasm.throw(message);
+}
 
 pub export fn wasmAlloc(len: usize) [*]u8 {
     const buf = wasm.gpa.alloc(u8, len) catch {
@@ -586,7 +589,6 @@ pub export fn getNodeRange(ast: *Ast, node: Ast.Node.Index) [*:0]const u32 {
     const last_token = ast.lastToken(node);
     const last_token_start = ast.tokens.items(.start)[@intCast(last_token)];
     const end = last_token_start + @as(u32, @intCast(ast.tokenSlice(last_token).len));
-    wasm.println("node: {d}, start: {d}, end: {d}", .{ node, start, end });
     const range = charToRange(ast, start, end);
     return wasmDupeZ(u32, &.{
         range.start_line,
@@ -646,6 +648,7 @@ pub export fn render(ast: *Ast) [*:0]const u8 {
 
 test {
     _ = @import("typescript.zig");
+    _ = @import("assemble_zir.zig");
 }
 
 test "deallocs correctly" {
@@ -665,5 +668,229 @@ test "deallocs correctly" {
     defer wasmFreeU8Z(
         @intFromPtr(json),
         std.mem.indexOfSentinel(u8, 0, json),
+    );
+}
+
+const AstGen = std.zig.AstGen;
+const Zir = std.zig.Zir;
+const printZir = @import("print_zir.zig");
+// zir
+//
+pub export fn debugZir(ast: *Ast) void {
+    // var zir = wasmCreate(Zir);
+    var zir = AstGen.generate(wasm.gpa, ast.*) catch {
+        @panic("failed to generate zir");
+    };
+    defer zir.deinit(wasm.gpa);
+    var wasm_writer = wasm.WasmWriter{};
+    printZir.render(
+        wasm.gpa,
+        wasm_writer.writer(),
+        ast,
+        zir,
+    ) catch {
+        @panic("failed to render zir");
+    };
+
+    for (zir.instructions.items(.tag), zir.instructions.items(.data)) |tag, data| {
+        wasm.println("tag: {s} {any}", .{ @tagName(tag), data });
+    }
+}
+
+pub export fn generateZir(ast: *Ast) *Zir {
+    // if (ast.errors.len > 0) {
+    //     @panic("Cannot generate ZIR from AST with errors");
+    // }
+    const errors_len = ast.errors.len;
+    ast.errors.len = 0;
+    defer ast.errors.len = errors_len;
+    const zir_ = AstGen.generate(wasm.gpa, ast.*) catch {
+        @panic("failed to generate zir");
+    };
+    const zir = wasmCreate(Zir);
+    zir.* = zir_;
+    return zir;
+}
+
+pub export fn destroyZir(zir: *Zir) void {
+    zir.deinit(wasm.gpa);
+    wasmDestroy(zir);
+}
+
+pub export fn getZirInstructionsLength(zir: *Zir) u64 {
+    return zir.instructions.len;
+}
+pub export fn getZirInstructionTag(zir: *Zir, instruction: u32) u32 {
+    return @intFromEnum(zir.instructions.items(.tag)[instruction]);
+}
+
+pub export fn renderZir(zir: *Zir, ast: *Ast) [*:0]const u8 {
+    // var buffer = std.BoundedArray(u8, 1024 * 1024).init(0) catch {
+    var buffer = std.ArrayList(u8).initCapacity(wasm.gpa, 256) catch {
+        @panic("failed to allocate memory");
+    };
+
+    printZir.render(
+        wasm.gpa,
+        buffer.writer(),
+        ast,
+        zir.*,
+    ) catch {
+        @panic("failed to render zir");
+    };
+    return buffer.toOwnedSliceSentinel(0) catch {
+        @panic("failed to get string slice");
+    };
+}
+
+pub const Diagnostic = struct {
+    code: [:0]const u8,
+    pos: u32,
+    len: u32,
+    token: u32,
+    node: ?u32 = null,
+    message: [*:0]const u8,
+};
+
+pub export fn getAstErrors(ast: *Ast) [*:0]const u8 {
+    if (ast.errors.len == 0) {
+        return stringify(null).ptr;
+    }
+    var arena = std.heap.ArenaAllocator.init(wasm.gpa);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+
+    var diagnostics = std.ArrayListUnmanaged(Diagnostic).initCapacity(arena_allocator, ast.errors.len) catch {
+        @panic("failed to allocate memory");
+    };
+
+    for (ast.errors) |err| {
+        var buffer = std.ArrayListUnmanaged(u8){};
+        ast.renderError(err, buffer.writer(arena_allocator)) catch {
+            @panic("failed to render error");
+        };
+        diagnostics.appendAssumeCapacity(.{
+            .code = @tagName(err.tag),
+            .pos = ast.tokens.items(.start)[@intCast(err.token)],
+            .len = @intCast(ast.tokenSlice(err.token).len),
+            .token = err.token,
+            .message = buffer.toOwnedSliceSentinel(arena_allocator, 0) catch {
+                @panic("failed to get string slice");
+            },
+        });
+    }
+    return stringify(diagnostics.items);
+}
+pub export fn getZirErrors(zir: *Zir, ast: *Ast) [*:0]const u8 {
+    const payload_index = zir.extra[@intFromEnum(Zir.ExtraIndex.compile_errors)];
+    if (payload_index == 0) return stringify(null).ptr;
+
+    const header = zir.extraData(Zir.Inst.CompileErrors, payload_index);
+    const items_len = header.data.items_len;
+
+    var arena = std.heap.ArenaAllocator.init(wasm.gpa);
+    defer arena.deinit();
+    const arena_allocator = arena.allocator();
+    var diagnostics = std.ArrayListUnmanaged(Diagnostic).initCapacity(arena_allocator, items_len) catch {
+        @panic("failed to allocate memory");
+    };
+
+    var extra_index = header.end;
+
+    for (0..items_len) |_| {
+        const item = zir.extraData(Zir.Inst.CompileErrors.Item, extra_index);
+        extra_index = item.end;
+        const node = item.data.node;
+        const start_token = ast.firstToken(node);
+        const end_token = ast.lastToken(node);
+        const pos = ast.tokens.items(.start)[start_token];
+        const end_token_len: u32 = @intCast(ast.tokenSlice(end_token).len);
+        const end = ast.tokens.items(.start)[end_token] + end_token_len;
+        diagnostics.appendAssumeCapacity(.{
+            .code = "zir",
+            .pos = pos,
+            .len = end - pos,
+            .token = item.data.token,
+            .node = node,
+            .message = zir.nullTerminatedString(item.data.msg).ptr,
+        });
+        // item.data.token;
+        // item.data.node
+        // const err_loc = blk: {
+        //     if (item.data.node != 0) {
+        //         break :blk offsets.nodeToLoc(tree, item.data.node);
+        //     }
+        //     const loc = offsets.tokenToLoc(tree, item.data.token);
+        //     break :blk offsets.Loc{
+        //         .start = loc.start + item.data.byte_offset,
+        //         .end = loc.end,
+        //     };
+        // };
+
+        // var notes: []types.DiagnosticRelatedInformation = &.{};
+        // if (item.data.notes == 0) continue;
+        // const block = zir.extraData(Zir.Inst.Block, item.data.notes);
+        // const body = zir.extra[block.end..][0..block.data.body_len];
+        //
+        //  notes = try arena.alloc(types.DiagnosticRelatedInformation, body.len);
+        // for (notes, body) |*note, note_index| {
+        //     const note_item = zir.extraData(Zir.Inst.CompileErrors.Item, note_index);
+        //     const msg = zir.nullTerminatedString(note_item.data.msg);
+        //
+        //     const loc = blk: {
+        //         if (note_item.data.node != 0) {
+        //             break :blk offsets.nodeToLoc(tree, note_item.data.node);
+        //         }
+        //         const loc = offsets.tokenToLoc(tree, note_item.data.token);
+        //         break :blk offsets.Loc{
+        //             .start = loc.start + note_item.data.byte_offset,
+        //             .end = loc.end,
+        //         };
+        //     };
+        //
+        //     note.* = .{
+        //         .location = .{
+        //             .uri = handle.uri,
+        //             .range = offsets.locToRange(handle.tree.source, loc, server.offset_encoding),
+        //         },
+        //         .message = msg,
+        //     };
+
+        // const msg = zir.nullTerminatedString(item.data.msg);
+        // diagnostics.appendAssumeCapacity(.{
+        //     .range = offsets.locToRange(handle.tree.source, err_loc, server.offset_encoding),
+        //     .severity = .Error,
+        //     .code = .{ .string = "ast_check" },
+        //     .source = "zls",
+        //     .message = msg,
+        //     .relatedInformation = if (notes.len != 0) notes else null,
+        // });
+    }
+    return stringify(diagnostics.items);
+}
+// pub export fn getZirInstructionData(zir: *Zir, instruction: u32) [*:0]const u32 {
+//     const data = zir.instructions.items(.data)[instruction];
+//     return wasmDupeZ(u32, data);
+// }
+test "zir" {
+    const source =
+        \\fn main() void {
+        \\    const x: i32 = 2;
+        \\    const y: i32 = 2;
+        \\    cons
+        \\}
+    ;
+    const source_buf = wasmDupeZ(u8, source);
+    const ast = parseAstFromSource(source_buf, source.len);
+    defer destroyAst(ast);
+
+    const zir = generateZir(ast);
+    defer destroyZir(zir);
+
+    const rendered = renderZir(zir, ast);
+    std.debug.print(" {s}\n", .{rendered});
+    defer wasmFreeU8Z(
+        @intFromPtr(rendered),
+        std.mem.indexOfSentinel(u8, 0, rendered),
     );
 }

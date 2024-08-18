@@ -40,11 +40,13 @@ import {
   type AstfullSlice,
   type AstfullSwitchCase,
   type AstfullAssignDestructure,
+  type Diagnostic,
 } from "./bin/types";
 export * from "./bin/types";
 export { AstNodeTag } from "./bin/types";
 export const memory = new WebAssembly.Memory({ initial: 17 });
-let exports: Exports;
+export let exports: Exports;
+
 
 let logMem: string = "";
 let timeout: Timer | null = null;
@@ -176,7 +178,6 @@ const encodeString = (str: string) => {
 export const parseAstFromSource = (source: string) => {
   const encoded = encodeString(source);
   const ast = exports.parseAstFromSource(encoded.ptr, encoded.length);
-  console.log("[ast] create", typeof window, ast);
   return ast;
 };
 
@@ -283,7 +284,6 @@ export const getNodeTagLabel = (ast: number, index: AstNodeIndex) => {
 };
 
 export const destroyAst = (ast: number) => {
-  console.log(`[ast] destroy`, typeof window, ast);
   exports.destroyAst(ast);
 };
 
@@ -563,3 +563,36 @@ export const alignedVarDecl = (ast: number, node: number) => {
   assertNode(ast, node);
   return decodeJson<AstfullVarDecl>(exports.alignedVarDecl(ast, node));
 };
+
+export const getAstErrors = (ast: number) => {
+  return decodeJson<Diagnostic[] | null>(exports.getAstErrors(ast)) ?? [];
+};
+
+export const getZirErrors = (zir: number, ast: number) => {
+  return decodeJson<Diagnostic[] | null>(exports.getZirErrors(zir, ast)) ?? [];
+}
+// Zir
+
+export const generateZir = (ast: number) => {
+  return exports.generateZir(ast);
+}
+
+export const destroyZir = (zir: number) => {
+  exports.destroyZir(zir);
+}
+
+export const getZirInstructionsLength = (zir: number) => {
+  return exports.getZirInstructionsLength(zir);
+}
+
+export const getZirInstructionTag = (zir: number, index: number) => {
+  return exports.getZirInstructionTag(zir, index);
+}
+
+export const printZir = (zir: number, ast: number) => {
+  if(!zir) {
+    throw new Error("Zir is null");
+  }
+
+  return decodeNullTerminatedString(memory, exports.renderZir(zir, ast));
+}

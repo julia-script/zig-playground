@@ -1,5 +1,3 @@
-import { initVimMode } from "monaco-vim";
-
 import {
   getNodeRange,
   tokenizeLine,
@@ -8,9 +6,7 @@ import {
 } from "@zig-devkit/lib";
 import * as monaco from "monaco-editor";
 import {
-  ComponentProps,
   startTransition,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -19,7 +15,8 @@ import { ActiveEntity, useAst } from "../AstProvider";
 import { useEffectEvent } from "../useEffectEvent";
 import { TokenToScopeMap } from "./TokenToScopeMap";
 import { theme } from "./theme";
-import { cn } from "@/lib/utils";
+import { trycatch } from "../trycatch";
+// import { initVimMode } from "monaco-vim";
 
 class State {
   clone = () => new State();
@@ -27,30 +24,35 @@ class State {
 }
 monaco.editor.defineTheme("zig-theme", theme);
 
-monaco.languages.register({ id: "zig" });
+monaco.languages.register({ id: "zig", extensions: ["zig"] });
 monaco.languages.setTokensProvider("zig", {
   getInitialState: () => {
     return new State();
   },
   tokenize(line, state) {
-    const tokens = tokenizeLine(line).map((token) => ({
-      startIndex: token.start,
-      scopes: TokenToScopeMap[token.tag],
-    }));
+    const [, tokens = []] = trycatch(() =>
+      tokenizeLine(line).map((token) => ({
+        startIndex: token.start,
+        scopes: TokenToScopeMap[token.tag],
+      })),
+    );
     return {
       tokens,
       endState: state.clone(),
     };
   },
 });
+monaco.languages.setLanguageConfiguration("zig", {
+  comments: {
+    lineComment: "//",
+  },
+});
 
 export const Editor = () => {
   const ref = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-
   const statusBarRef = useRef<HTMLDivElement>(null);
-  const { source, setSource, getAst, ast, active, setActive, hovered } =
-    useAst();
+  const { source, setSource, ast, active, hovered, diagnostics } = useAst();
 
   const save = useEffectEvent(() => {
     startTransition(() => {
@@ -81,14 +83,14 @@ export const Editor = () => {
       language: "zig",
       automaticLayout: true,
       minimap: { enabled: false },
-      wordWrap: "on",
+      // wordWrap: "on",
       scrollBeyondLastLine: false,
       tabSize: 4,
       theme: "zig-theme",
-      fontSize: 16,
+      fontSize: 12,
     });
 
-    const vim = initVimMode(editor, statusBarRef.current);
+    // const vim = initVimMode(editor, statusBarRef.current);
 
     editor.addAction({
       id: "format-on-save",
@@ -110,10 +112,36 @@ export const Editor = () => {
     editorRef.current = editor;
     return () => {
       editor.dispose();
-      vim.dispose();
+      // vim.dispose();
       editorRef.current = null;
     };
   }, []);
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const model = editorRef.current.getModel();
+    if (!model) return;
+    if (!diagnostics?.length) {
+      monaco.editor.setModelMarkers(model, "astErrors", []);
+      return;
+    }
+
+    monaco.editor.setModelMarkers(
+      model,
+      "astErrors",
+      diagnostics.map((diagnostic) => {
+        const position = model.getPositionAt(diagnostic.pos);
+
+        return {
+          severity: monaco.MarkerSeverity.Error,
+          message: diagnostic.message,
+          startLineNumber: position.lineNumber,
+          startColumn: position.column,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column + diagnostic.len,
+        };
+      }),
+    );
+  }, [diagnostics]);
 
   const highlight = useEffectEvent(
     (
@@ -124,13 +152,13 @@ export const Editor = () => {
       if (!editor) return;
 
       if (!active) return;
-      const location =
-        active.kind === "token"
-          ? getTokenRange(ast, active.id)
-          : active.kind === "node"
-            ? getNodeRange(ast, active.id)
-            : null;
-
+      const [, location] = trycatch(() => {
+        if (active.kind === "token") {
+          return getTokenRange(ast, active.id);
+        }
+        return getNodeRange(ast, active.id);
+      });
+      if (!location) return;
       if (!location) return;
 
       const range = new monaco.Range(
@@ -141,39 +169,19 @@ export const Editor = () => {
       );
 
       const decorations = editor.createDecorationsCollection([
-        // {
-        //   range: new monaco.Range(3, 1, 5, 1),
-        //   options: {
-        //     isWholeLine: true,
-        //     linesDecorationsClassName: "myLineDecoration",
-        //   },
-        // },
         {
           range,
           options: decorationOptions,
-          // options: {
-          //
-          //   beforeContentClassName: "border-l border-1 border-yellow-500",
-          //   afterContentClassName: "border-r border-1 border-yellow-500",
-          //   inlineClassName: "bg-yellow-500 bg-opacity-20",
-          //   // inlineClassName: "editor-active",
-          //   // inlineClassName:
-          //   //   "outline outline-2 outline-yellow-500 bg-opacity-20 outline-offset-2 inline-block rounded-sm",
-          // },
         },
       ]);
-      // console.log(decorations);
       return decorations;
     },
   );
   useEffect(() => {
     if (!active) return;
     const decorations = highlight(active, {
-      // -5px 0px 0px 0px black
       beforeContentClassName: "active-left shadow-yellow-500",
-      // beforeContentClassName: "border-l border-1 border-yellow-500",
       afterContentClassName: "active-right shadow-yellow-500",
-      // inlineClassName: "bg-yellow-500 bg-opacity-20 brightness-125",
       inlineClassName: "bg-yellow-500 bg-opacity-20 brightness-125",
     });
     return () => {
@@ -185,8 +193,6 @@ export const Editor = () => {
     if (active && active.id === hovered.id && active.kind === hovered.kind)
       return;
     const decorations = highlight(hovered, {
-      // beforeContentClassName: "border-l border-1 border-yellow-500",
-      // afterContentClassName: "border-r border-1 border-yellow-500",
       inlineClassName: "bg-cyan-500 bg-opacity-20 brightness-125 ",
     });
     return () => {
@@ -201,40 +207,3 @@ export const Editor = () => {
   );
 };
 
-export const EditorReadOnly = ({
-  source,
-  className,
-  ...rest
-}: ComponentProps<"div"> & { source: string }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
-
-  useEffect(() => {
-    if (!ref.current) return;
-    if (editorRef.current) return;
-
-    const editor = monaco.editor.create(ref.current, {
-      language: "zig",
-      // automaticLayout: true,
-      value: source,
-
-      minimap: { enabled: false },
-      wordWrap: "on",
-      lineNumbers: "off",
-      readOnly: true,
-      scrollBeyondLastLine: false,
-      tabSize: 4,
-      theme: "zig-theme",
-      fontSize: 16,
-    });
-
-    editorRef.current = editor;
-    console.log(editor);
-    return () => {
-      editor.dispose();
-      editorRef.current = null;
-    };
-  }, []);
-
-  return <div ref={ref} className={cn("h-36 w-full", className)} {...rest} />;
-};

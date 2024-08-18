@@ -8,10 +8,13 @@ pub usingnamespace if (builtin.target.isWasm()) struct {
     pub const gpa = general_purpose_allocator.allocator();
 } else struct {
     pub const gpa = if (builtin.is_test) std.testing.allocator else general_purpose_allocator.allocator();
-    pub fn hostThrow(_: [*]const u8, _: usize) noreturn {
-        @panic("hostThrow not implemented");
+    pub fn hostThrow(message: [*]const u8, length: usize) noreturn {
+        @panic(message[0..length]);
     }
-    pub fn hostWrite(_: [*]const u8, _: usize) void {
-        @panic("hostWrite not implemented");
+    pub fn hostWrite(message: [*]const u8, length: usize) void {
+        const stderr = std.io.getStdErr();
+        _ = stderr.write(message[0..length]) catch {
+            @panic("Failed to write to stdout");
+        };
     }
 };

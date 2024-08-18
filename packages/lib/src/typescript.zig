@@ -1,5 +1,6 @@
 const std = @import("std");
 const Type = std.builtin.Type;
+const Diagnostic = @import("exports.zig").Diagnostic;
 
 pub fn formatTsType(writer: std.ArrayList(u8).Writer, T: type, comptime field: ?[]const u8) !void {
     if (field) |f| {
@@ -59,7 +60,7 @@ pub fn toUpperCamelCase(writer: std.ArrayList(u8).Writer, str: []const u8) !void
     }
 }
 pub fn formatTsEnum(writer: std.ArrayList(u8).Writer, type_info: Type.Enum, name: []const u8) !void {
-    @setEvalBranchQuota(2000);
+    @setEvalBranchQuota(4000);
     try writer.print("export enum {s} {{\n", .{name});
     inline for (type_info.fields) |field| {
         _ = try writer.write("  ");
@@ -187,12 +188,12 @@ pub inline fn formatExports(writer: std.ArrayList(u8).Writer, comptime T: type) 
                         @compileError(err);
                     },
                 }
+                _ = try writer.write(";\n");
             },
             else => {},
         }
 
         // try formatFieldValue(writer, @typeInfo(decl.type), 0);
-        _ = try writer.write(";\n");
     }
     try writer.print("}};\n", .{});
 }
@@ -212,6 +213,12 @@ pub fn genFinalTypes(allocator: std.mem.Allocator) !std.ArrayList(u8) {
     try writer.print("\n", .{});
 
     try formatTsType(writer, std.zig.Ast.Span, null);
+    try writer.print("\n", .{});
+
+    try formatTsType(writer, std.zig.Zir.Inst.Tag, null);
+    try writer.print("\n", .{});
+
+    try formatTsType(writer, Diagnostic, null);
     try writer.print("\n", .{});
 
     // ExtraData types

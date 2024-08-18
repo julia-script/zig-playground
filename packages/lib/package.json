@@ -8,7 +8,7 @@
     "build:js": "bun build ./js/index.ts --outdir ./dist --sourcemap=linked",
     "build:zig": "zig build wasm -p js",
     "dev:zig": "watchexec --exts zig zig build wasm -p js",
-    "dev:tsc": "tsc -w",
+    "dev:tsc": "tsc -w --preserveWatchOutput",
     "dev:js": "watchexec --exts ts -- bun build:js",
     "dev": "bun dev:js & bun dev:tsc & bun dev:zig",
     "clean": "rm -rf dist js/bin .zig-cache zig-out"

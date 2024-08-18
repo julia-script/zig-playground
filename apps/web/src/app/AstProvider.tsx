@@ -2,6 +2,11 @@
 import { useLocalStorage } from "@uidotdev/usehooks";
 import {
   destroyAst,
+  destroyZir,
+  Diagnostic,
+  generateZir,
+  getAstErrors,
+  getZirErrors,
   NodeRef,
   parseAstFromSource,
   promise,
@@ -16,28 +21,30 @@ import {
   PropsWithChildren,
   use,
   useState,
-  useCallback,
-  useEffect,
   useMemo,
 } from "react";
 import { useEffectEvent } from "./useEffectEvent";
-export const defaultSource = `fn main() void {
-    const x: i32 = 2;
-    const y: i32 = 2;
-    const z: i32 = x + y;
+import { trycatch } from "./trycatch";
+export const defaultSource = `const std = @import("std");
+
+pub fn main() !void {
+    const stdout = std.io.getStdOut().writer();
+    try stdout.print("Hello, {s}!\\n", .{"world"});
 }
 `;
-
 const AstContext = createContext<{
   getAst: () => number;
   ast: number;
-  tree: NodeRef,
+  getZir: () => number | null;
+  zir: number | null;
+  tree: NodeRef;
   source: string;
   setSource: Dispatch<SetStateAction<string>>;
   active: ActiveEntity | null;
   setActive: Dispatch<SetStateAction<ActiveEntity | null>>;
   hovered: ActiveEntity | null;
   setHovered: Dispatch<SetStateAction<ActiveEntity | null>>;
+  diagnostics: Diagnostic[];
 } | null>(null);
 export const useAst = () => {
   const context = useContext(AstContext);
@@ -46,25 +53,55 @@ export const useAst = () => {
   }
   return context;
 };
-const memoParseAst = () => {
-  const cache = new LRUCache<string, number>({
-    max: 10,
-    dispose: (value) => {
-      destroyAst(value);
-    },
-  });
 
-  function parse(source: string) {
-    if (cache.has(source)) {
-      return cache.get(source) as number;
-    }
-    const ast = parseAstFromSource(source);
-    cache.set(source, ast);
-    return ast;
+const cache = new LRUCache<
+  string,
+  {
+    ast: number;
+    zir: number | null;
   }
-  parse.cache = cache;
-  return parse;
+>({
+  max: 10,
+  dispose: ({ ast, zir }) => {
+    destroyAst(ast);
+    if (zir) destroyZir(zir);
+  },
+});
+const parseSource = (source: string) => {
+  const cached = cache.get(source);
+  if (cached) return cached;
+  const [,ast = 0] =  trycatch(() => parseAstFromSource(source));
+  const [,zir = null] = trycatch(() => generateZir(ast));
+  const result = { ast, zir };
+  cache.set(source, result);
+  return result;
 };
+// const memoParseAst = () => {
+//   const cache = new LRUCache<string, [number, number | null]>({
+//     max: 10,
+//     dispose: ([ast, zir]) => {
+//       destroyAst(ast);
+//       if (zir) destroyZir(zir);
+//     },
+//   });
+//
+//   function parse(source: string) {
+//     if (cache.has(source)) {
+//       return cache.get(source) as [number, number | null];
+//     }
+//     console.log(source);
+//     const ast = parseAstFromSource(source);
+//     const zir = generateZir(ast);
+//
+//     cache.set(source, [ast, zir]);
+//     return [ast, zir] as const;
+//     console.error(e);
+//     return [ast, null] as const;
+//   }
+// }
+// parse.cache = cache;
+// return parse;
+// };
 export type ActiveEntity = {
   kind: "node" | "token" | "instruction";
   id: number;
@@ -76,31 +113,58 @@ export const isSameActiveEntity = (
   if (!a || !b) return false;
   return a.id === b.id && a.kind === b.kind;
 };
+
 export const AstProvider = (props: PropsWithChildren) => {
   use(promise);
   const [source, setSource] = useLocalStorage("zig.src", defaultSource);
   const [hovered, setHovered] = useState<ActiveEntity | null>(null);
   const [active, setActive] = useState<ActiveEntity | null>(null);
-  const getAstFromSource = useCallback(memoParseAst(), []);
 
   const getAst = useEffectEvent(() => {
-    return getAstFromSource(source);
+    return parseSource(source).ast;
+  });
+  const getZir = useEffectEvent(() => {
+    return parseSource(source).zir;
   });
 
-  const ast = getAst();
-  useEffect(() => {
-    getAst();
-    return () => {
-      getAstFromSource.cache.clear();
-    };
-  }, [getAst]);
-  const tree = useMemo(() => treefy(ast), [ast, source ]);
+  const tree = useMemo((): NodeRef => {
+    try {
+      return treefy(getAst());
+    } catch (e) {
+      return {
+        children: [],
+        start: 0,
+        end: 0,
+        slice: source,
+        kind: "node",
+        index: 0,
+      };
+    }
+  }, [source]);
+  const diagnostics = useMemo(() => {
+    const ast = getAst();
+    const zir = getZir();
+    const [, astErrors = []] = trycatch(() => getAstErrors(ast));
+    const [, zirErrors = []] = trycatch(() => zir ? getZirErrors(zir, ast) : []);
+    return [...astErrors, ...zirErrors];
+    //   if (!zir) return astErrors;
+    //   try {
+    //     const zirErrors = zir ? getZirErrors(zir, ast) : [];
+    //     return [...astErrors, ...zirErrors];
+    //   } catch (e) {
+    //     return astErrors;
+    //   }
+    // } catch (e) {
+    //   return [];
+  }, [source]);
 
   return (
     <AstContext.Provider
       value={{
         getAst,
-        ast,
+        ast: getAst(),
+        getZir,
+        zir: getZir(),
         tree,
         source,
         setSource,
@@ -108,6 +172,7 @@ export const AstProvider = (props: PropsWithChildren) => {
         setActive,
         hovered,
         setHovered,
+        diagnostics,
       }}
       {...props}
     />

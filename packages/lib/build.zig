@@ -38,11 +38,12 @@ pub fn build(b: *std.Build) void {
 
     // const run_step = b.step("run", "Run the app");
     // run_step.dependOn(&run_cmd.step);
-
+    const test_filter = b.option([]const u8, "test-filter", "Test filter");
     const lib_unit_tests = b.addTest(.{
         .root_source_file = b.path("src/exports.zig"),
         .target = target,
         .optimize = optimize,
+        .filter = test_filter,
     });
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
@@ -95,6 +96,7 @@ pub fn build(b: *std.Build) void {
 
     const stdout = wasm_to_wat.captureStdOut();
     const save_wat = b.addInstallFile(stdout, "bin/" ++ wasm_name ++ ".wat");
+    _ = save_wat; // autofix
 
     const wasm_base64 = try JsBase64Step.create(b, wasm_exe);
     const wasm_install_base64 = b.addInstallFile(wasm_base64.getOutput(), "bin/" ++ wasm_name ++ "-base64.ts");
@@ -129,8 +131,8 @@ pub fn build(b: *std.Build) void {
         &wasm_base64.step,
         &wasm_install_base64.step,
 
-        &wasm_to_wat.step,
-        &save_wat.step,
+        // &wasm_to_wat.step,
+        // &save_wat.step,
 
         &write_ts_types.step,
         &install_ts_types.step,
