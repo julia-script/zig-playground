@@ -30,7 +30,6 @@ import {
   printZir,
 } from "@zig-devkit/lib";
 
-import { Editor } from "./editor";
 import { useId, useMemo, useState } from "react";
 import {
   ResizableHandle,
@@ -48,13 +47,18 @@ import { useAst, AstProvider, isSameActiveEntity } from "./AstProvider";
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import { trycatch } from "./trycatch";
+import dynamic from "next/dynamic";
+
+const Editor = dynamic(() => import("./editor").then((mod) => mod.Editor), {
+  ssr: false,
+});
 
 export const Playground = () => {
   return (
     <div className="h-full overflow-y-hidden">
       <AstProvider>
         <header className="sticky top-0 flex h-16 items-center gap-2 border-b bg-background px-4 text-xs font-bold md:px-6">
-          <Image src="/zig-logo-light.svg" alt="Zig" width={40} height={20} />
+          <Image src="/zig-logo-light.svg" alt="Zig" width={40} height={14} />
           Playground
         </header>
         <Panels />
@@ -557,7 +561,7 @@ const Tree = () => {
 };
 
 const Zir = () => {
-  const { zir, ast, source, diagnostics } = useAst();
+  const { zir, ast, diagnostics } = useAst();
   const rendered = useMemo(() => {
     if (!zir) return null;
     if (diagnostics.length > 0) return null;

@@ -1,3 +1,4 @@
+"use client";
 import {
   getNodeRange,
   tokenizeLine,
@@ -17,32 +18,34 @@ class State {
   clone = () => new State();
   equals = (other: monaco.languages.IState) => true;
 }
-monaco.editor.defineTheme("zig-theme", theme);
+const setupMonaco = () => {
+  monaco.editor.defineTheme("zig-theme", theme);
+  monaco.languages.register({ id: "zig", extensions: ["zig"] });
+  monaco.languages.setTokensProvider("zig", {
+    getInitialState: () => {
+      return new State();
+    },
+    tokenize(line, state) {
+      const [, tokens = []] = trycatch(() =>
+        tokenizeLine(line).map((token) => ({
+          startIndex: token.start,
+          scopes: TokenToScopeMap[token.tag],
+        })),
+      );
+      return {
+        tokens,
+        endState: state.clone(),
+      };
+    },
+  });
+  monaco.languages.setLanguageConfiguration("zig", {
+    comments: {
+      lineComment: "//",
+    },
+  });
+};
 
-monaco.languages.register({ id: "zig", extensions: ["zig"] });
-monaco.languages.setTokensProvider("zig", {
-  getInitialState: () => {
-    return new State();
-  },
-  tokenize(line, state) {
-    const [, tokens = []] = trycatch(() =>
-      tokenizeLine(line).map((token) => ({
-        startIndex: token.start,
-        scopes: TokenToScopeMap[token.tag],
-      })),
-    );
-    return {
-      tokens,
-      endState: state.clone(),
-    };
-  },
-});
-monaco.languages.setLanguageConfiguration("zig", {
-  comments: {
-    lineComment: "//",
-  },
-});
-
+setupMonaco();
 export const Editor = () => {
   const ref = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
@@ -95,7 +98,7 @@ export const Editor = () => {
       contextMenuGroupId: "navigation",
       contextMenuOrder: 1.5,
 
-      run: function () {
+      run: function() {
         save();
       },
     });
