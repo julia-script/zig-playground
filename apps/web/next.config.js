@@ -5,6 +5,5 @@ module.exports = {
   experimental: {
     // ppr: true,
     // reactCompiler: true,
-
   },
 };

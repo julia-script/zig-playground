@@ -122,13 +122,13 @@ const TokenDetails = ({ token }: { token: number }) => {
   ];
   return (
     <div>
-      <h2 className="font-semibold text-lg p-2 border-b">Token Details</h2>
+      <h2 className="border-b p-2 text-lg font-semibold">Token Details</h2>
 
       {diagnostics.length > 0 &&
         diagnostics.map((d, i) => (
           <div
             key={i}
-            className="border text-red-400 border-red-400 p-2 text-xs rounded-sm my-2 font-mono"
+            className="my-2 rounded-sm border border-red-400 p-2 font-mono text-xs text-red-400"
           >
             {d.message}
           </div>
@@ -321,7 +321,7 @@ const NodeDetails = ({ node }: { node: number }) => {
 
   return (
     <div className="">
-      <h2 className="font-semibold text-lg p-2 border-b">Node Details</h2>
+      <h2 className="border-b p-2 text-lg font-semibold">Node Details</h2>
       <Table>
         <TableBody>
           {tableRows.map(([col1, col2], i) => (
@@ -334,7 +334,7 @@ const NodeDetails = ({ node }: { node: number }) => {
       </Table>
       {secondaryTableRows.map(([col1, col2], i) => (
         <div key={i} className="p-2 text-xs text-zinc-400">
-          <h3 className="font-bold py-2 text-zinc-100">{col1}</h3>
+          <h3 className="py-2 font-bold text-zinc-100">{col1}</h3>
           {col2}
         </div>
       ))}
@@ -393,7 +393,7 @@ const _Leaf = ({ nodeRef }: { nodeRef: NodeRef }) => {
   return (
     <section className="flex flex-col">
       <header
-        className={cn("flex cursor-pointer ", {
+        className={cn("flex cursor-pointer", {
           "bg-zinc-900/50": isHovered,
           "bg-zinc-900 text-yellow-500": isActive,
         })}
@@ -419,21 +419,21 @@ const _Leaf = ({ nodeRef }: { nodeRef: NodeRef }) => {
         }}
       >
         <IndentGuides indent={path.length} />
-        <h2 className="flex gap-1 items-center py-1">
+        <h2 className="flex items-center gap-1 py-1">
           {!!children.length && (
             <button
               onClick={(e) => setCollapsed((collapsed) => !collapsed)}
               className="text-zinc-600 hover:text-zinc-400"
             >
               {!collapsed ? (
-                <CaretDownIcon className="w-4 h-4" />
+                <CaretDownIcon className="h-4 w-4" />
               ) : (
-                <CaretRightIcon className="w-4 h-4" />
+                <CaretRightIcon className="h-4 w-4" />
               )}
             </button>
           )}
           {!children.length && (
-            <DotFilledIcon className="w-4 h-4 text-zinc-600" />
+            <DotFilledIcon className="h-4 w-4 text-zinc-600" />
           )}
           <TypeBadge kind={"node"} index={node} />
           <span>.{AstNodeTagMap[tag]}</span>
@@ -469,7 +469,7 @@ const IndentGuides = ({ indent }: { indent: number }) => {
   return (
     <div className="flex">
       {new Array(indent).fill(0).map((_, i) => (
-        <span className="w-4 border-r block first:w-2" key={i} />
+        <span className="block w-4 border-r first:w-2" key={i} />
       ))}
     </div>
   );
@@ -482,7 +482,7 @@ const TypeBadge = ({
   index: number;
 }) => {
   return (
-    <span className="text-[0.8em] ">
+    <span className="text-[0.8em]">
       {kind === "token" ? `T[` : "N["}
       {index}
       {"]"}
@@ -508,7 +508,7 @@ const Token = ({ token, path }: { token: number; path: number[] }) => {
   const id = useId();
   return (
     <div
-      className={cn("flex cursor-pointer  text-zinc-400", {
+      className={cn("flex cursor-pointer text-zinc-400", {
         "bg-zinc-900/50": isHovered,
         "bg-zinc-900 text-yellow-500": isActive,
         // "bg-red-500/50": diagnostics.length > 0,
@@ -535,8 +535,8 @@ const Token = ({ token, path }: { token: number; path: number[] }) => {
     >
       <IndentGuides indent={path.length + 1} />
       <h2
-        className={cn("flex gap-1 items-center py-1 pl-1 ", {
-          "decoration-wavy underline decoration-red-400":
+        className={cn("flex items-center gap-1 py-1 pl-1", {
+          "underline decoration-red-400 decoration-wavy":
             diagnostics.length > 0,
         })}
       >
@@ -549,8 +549,8 @@ const Tree = () => {
   const { tree, ast } = useAst();
 
   return (
-    <section className="flex flex-col gap-2 text-xs overflow-y-auto h-full no-scrollbar">
-      <h2 className="font-semibold text-lg p-2 border-b">AST</h2>
+    <section className="no-scrollbar flex h-full flex-col gap-2 overflow-y-auto text-xs">
+      <h2 className="border-b p-2 text-lg font-semibold">AST</h2>
       <Leaf nodeRef={tree} />
     </section>
   );
@@ -566,12 +566,12 @@ const Zir = () => {
     return rendered;
   }, [zir, ast]);
   return (
-    <div className="text-xs overflow-auto no-scrollbar">
-      <h2 className="font-semibold text-lg p-2 border-b">ZIR</h2>
+    <div className="no-scrollbar overflow-auto text-xs">
+      <h2 className="border-b p-2 text-lg font-semibold">ZIR</h2>
       {diagnostics.map((d, i) => (
         <div
           key={i}
-          className="border text-red-400 border-red-400 p-2 text-xs rounded-sm my-2 font-mono"
+          className="my-2 rounded-sm border border-red-400 p-2 font-mono text-xs text-red-400"
         >
           {d.message}
         </div>

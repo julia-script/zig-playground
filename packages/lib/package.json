@@ -11,10 +11,12 @@
     "dev:tsc": "tsc -w --preserveWatchOutput",
     "dev:js": "watchexec --exts ts -- bun build:js",
     "dev": "bun dev:js & bun dev:tsc & bun dev:zig",
-    "clean": "rm -rf dist js/bin .zig-cache zig-out"
+    "clean": "rm -rf dist js/bin .zig-cache zig-out",
+    "format": "prettier . --write"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "prettier": "3.3.3"
   },
   "peerDependencies": {
     "typescript": "^5.0.0"

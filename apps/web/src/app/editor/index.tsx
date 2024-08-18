@@ -5,12 +5,7 @@ import {
   getTokenRange,
 } from "@zig-devkit/lib";
 import * as monaco from "monaco-editor";
-import {
-  startTransition,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import { startTransition, useEffect, useLayoutEffect, useRef } from "react";
 import { ActiveEntity, useAst } from "../AstProvider";
 import { useEffectEvent } from "../useEffectEvent";
 import { TokenToScopeMap } from "./TokenToScopeMap";
@@ -200,10 +195,9 @@ export const Editor = () => {
     };
   }, [hovered, active]);
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       <div ref={ref} className="grow" />
       <div ref={statusBarRef} className="h-4" />
     </div>
   );
 };
-

@@ -70,8 +70,8 @@ const cache = new LRUCache<
 const parseSource = (source: string) => {
   const cached = cache.get(source);
   if (cached) return cached;
-  const [,ast = 0] =  trycatch(() => parseAstFromSource(source));
-  const [,zir = null] = trycatch(() => generateZir(ast));
+  const [, ast = 0] = trycatch(() => parseAstFromSource(source));
+  const [, zir = null] = trycatch(() => generateZir(ast));
   const result = { ast, zir };
   cache.set(source, result);
   return result;
@@ -145,7 +145,9 @@ export const AstProvider = (props: PropsWithChildren) => {
     const ast = getAst();
     const zir = getZir();
     const [, astErrors = []] = trycatch(() => getAstErrors(ast));
-    const [, zirErrors = []] = trycatch(() => zir ? getZirErrors(zir, ast) : []);
+    const [, zirErrors = []] = trycatch(() =>
+      zir ? getZirErrors(zir, ast) : [],
+    );
     return [...astErrors, ...zirErrors];
     //   if (!zir) return astErrors;
     //   try {

@@ -47,7 +47,6 @@ export { AstNodeTag } from "./bin/types";
 export const memory = new WebAssembly.Memory({ initial: 17 });
 export let exports: Exports;
 
-
 let logMem: string = "";
 let timeout: Timer | null = null;
 export const promise = WebAssembly.instantiate(bytes, {
@@ -570,29 +569,29 @@ export const getAstErrors = (ast: number) => {
 
 export const getZirErrors = (zir: number, ast: number) => {
   return decodeJson<Diagnostic[] | null>(exports.getZirErrors(zir, ast)) ?? [];
-}
+};
 // Zir
 
 export const generateZir = (ast: number) => {
   return exports.generateZir(ast);
-}
+};
 
 export const destroyZir = (zir: number) => {
   exports.destroyZir(zir);
-}
+};
 
 export const getZirInstructionsLength = (zir: number) => {
   return exports.getZirInstructionsLength(zir);
-}
+};
 
 export const getZirInstructionTag = (zir: number, index: number) => {
   return exports.getZirInstructionTag(zir, index);
-}
+};
 
 export const printZir = (zir: number, ast: number) => {
-  if(!zir) {
+  if (!zir) {
     throw new Error("Zir is null");
   }
 
   return decodeNullTerminatedString(memory, exports.renderZir(zir, ast));
-}
+};
