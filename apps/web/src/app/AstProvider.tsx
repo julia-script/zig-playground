@@ -1,5 +1,5 @@
 "use client";
-import { useLocalStorage } from "@uidotdev/usehooks";
+// import { useLocalStorage } from "@uidotdev/usehooks";
 import {
   destroyAst,
   destroyZir,
@@ -67,6 +67,7 @@ const cache = new LRUCache<
     if (zir) destroyZir(zir);
   },
 });
+
 const parseSource = (source: string) => {
   const cached = cache.get(source);
   if (cached) return cached;
@@ -76,36 +77,12 @@ const parseSource = (source: string) => {
   cache.set(source, result);
   return result;
 };
-// const memoParseAst = () => {
-//   const cache = new LRUCache<string, [number, number | null]>({
-//     max: 10,
-//     dispose: ([ast, zir]) => {
-//       destroyAst(ast);
-//       if (zir) destroyZir(zir);
-//     },
-//   });
-//
-//   function parse(source: string) {
-//     if (cache.has(source)) {
-//       return cache.get(source) as [number, number | null];
-//     }
-//     console.log(source);
-//     const ast = parseAstFromSource(source);
-//     const zir = generateZir(ast);
-//
-//     cache.set(source, [ast, zir]);
-//     return [ast, zir] as const;
-//     console.error(e);
-//     return [ast, null] as const;
-//   }
-// }
-// parse.cache = cache;
-// return parse;
-// };
+
 export type ActiveEntity = {
   kind: "node" | "token" | "instruction";
   id: number;
 };
+
 export const isSameActiveEntity = (
   a: ActiveEntity | null,
   b: ActiveEntity | null,
@@ -116,7 +93,8 @@ export const isSameActiveEntity = (
 
 export const AstProvider = (props: PropsWithChildren) => {
   use(promise);
-  const [source, setSource] = useLocalStorage("zig.src", defaultSource);
+  // const [source, setSource] = useLocalStorage("zig.src", defaultSource);
+  const [source, setSource] = useState(defaultSource);
   const [hovered, setHovered] = useState<ActiveEntity | null>(null);
   const [active, setActive] = useState<ActiveEntity | null>(null);
 
@@ -149,15 +127,6 @@ export const AstProvider = (props: PropsWithChildren) => {
       zir ? getZirErrors(zir, ast) : [],
     );
     return [...astErrors, ...zirErrors];
-    //   if (!zir) return astErrors;
-    //   try {
-    //     const zirErrors = zir ? getZirErrors(zir, ast) : [];
-    //     return [...astErrors, ...zirErrors];
-    //   } catch (e) {
-    //     return astErrors;
-    //   }
-    // } catch (e) {
-    //   return [];
   }, [source]);
 
   return (
